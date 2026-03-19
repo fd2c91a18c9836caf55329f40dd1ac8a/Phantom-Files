@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <style>
+      .title { font: 700 20px "Helvetica", "Arial", sans-serif; fill: #0f172a; }
+      .label { font: 600 14px "Helvetica", "Arial", sans-serif; fill: #0f172a; }
+      .small { font: 500 12px "Helvetica", "Arial", sans-serif; fill: #0f172a; }
+      .box { fill: #f8fafc; stroke: #0f172a; stroke-width: 1.6; rx: 10; ry: 10; }
+      .panel { fill: #dbeafe; stroke: #1e3a8a; stroke-width: 2; rx: 18; ry: 18; }
+      .factory { fill: #ede9fe; stroke: #8b5cf6; stroke-width: 1.6; rx: 12; ry: 12; }
+      .sensors { fill: #fee2e2; stroke: #f87171; stroke-width: 1.6; rx: 12; ry: 12; }
+      .core { fill: #f8fafc; stroke: #334155; stroke-width: 1.6; rx: 12; ry: 12; }
+      .sandbox { fill: #dcfce7; stroke: #22c55e; stroke-width: 1.6; rx: 12; ry: 12; }
+      .storage { fill: #e2e8f0; stroke: #64748b; stroke-width: 1.6; rx: 12; ry: 12; }
+      .api { fill: #e0f2fe; stroke: #38bdf8; stroke-width: 1.6; rx: 12; ry: 12; }
+      .arrow { stroke: #0f172a; stroke-width: 2; fill: none; }
+      .dashed { stroke-dasharray: 6 6; }
+      .hint { font: 500 11px "Helvetica", "Arial", sans-serif; fill: #334155; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#0b0f1a"/>
+
+  <!-- Outer dashed frame -->
+  <rect x="30" y="30" width="1540" height="840" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="10 8"/>
+
+  <!-- Main container -->
+  <rect x="140" y="90" width="1200" height="700" class="panel"/>
+  <text x="740" y="125" class="title" text-anchor="middle">Phantom Files Daemon (systemd service)</text>
+
+  <!-- External: File System -->
+  <rect x="60" y="390" width="70" height="52" fill="#facc15" stroke="#a16207" stroke-width="2" rx="6" ry="6"/>
+  <rect x="60" y="376" width="28" height="16" fill="#fde68a" stroke="#a16207" stroke-width="2" rx="4" ry="4"/>
+  <text x="45" y="465" class="small" fill="#e2e8f0">Файловая система</text>
+
+  <!-- External: Docker Engine -->
+  <rect x="1410" y="380" width="150" height="90" fill="#111827" stroke="#64748b" stroke-width="2" rx="10" ry="10"/>
+  <text x="1435" y="430" class="small" fill="#e2e8f0">Docker Engine</text>
+
+  <!-- Factory -->
+  <rect x="190" y="170" width="310" height="170" class="factory"/>
+  <text x="210" y="205" class="label">Module Factory</text>
+  <rect x="210" y="225" width="270" height="46" class="box"/>
+  <text x="225" y="253" class="small">Генерация ловушек</text>
+  <rect x="210" y="280" width="270" height="46" class="box"/>
+  <text x="225" y="308" class="small">Time stomping + IDs</text>
+
+  <!-- Sensors -->
+  <rect x="190" y="370" width="310" height="210" class="sensors"/>
+  <text x="210" y="405" class="label">Module Sensors</text>
+  <rect x="210" y="420" width="270" height="40" class="box"/>
+  <text x="225" y="445" class="small">fanotify (pre-access)</text>
+  <rect x="210" y="465" width="270" height="40" class="box"/>
+  <text x="225" y="490" class="small">eBPF (LSM/tracepoints)</text>
+  <rect x="210" y="510" width="270" height="40" class="box"/>
+  <text x="225" y="535" class="small">inotify (fallback)</text>
+
+  <!-- Core -->
+  <rect x="570" y="240" width="330" height="260" class="core"/>
+  <text x="590" y="275" class="label">Module Core (OODA)</text>
+  <rect x="590" y="295" width="290" height="54" class="box"/>
+  <text x="605" y="327" class="small">Event analysis + context</text>
+  <rect x="590" y="360" width="290" height="54" class="box"/>
+  <text x="605" y="392" class="small">Decision logic + policy</text>
+  <rect x="590" y="425" width="290" height="46" class="box"/>
+  <text x="605" y="453" class="small">Audit log (JSONL)</text>
+
+  <!-- Sandbox -->
+  <rect x="970" y="220" width="300" height="320" class="sandbox"/>
+  <text x="990" y="255" class="label">Module Sandbox</text>
+  <rect x="990" y="275" width="260" height="56" class="box"/>
+  <text x="1005" y="308" class="small">Docker API (optional)</text>
+  <rect x="990" y="340" width="260" height="56" class="box"/>
+  <text x="1005" y="373" class="small">Forensics control</text>
+  <rect x="990" y="405" width="260" height="56" class="box"/>
+  <text x="1005" y="438" class="small">PCAP precapture</text>
+
+  <!-- API -->
+  <rect x="570" y="540" width="330" height="130" class="api"/>
+  <text x="590" y="575" class="label">API / Metrics</text>
+  <text x="590" y="602" class="small">ASGI, JWT/API key</text>
+  <text x="590" y="625" class="small">health / metrics</text>
+
+  <!-- Storage -->
+  <rect x="970" y="580" width="300" height="120" class="storage"/>
+  <text x="990" y="615" class="label">Хранилище улик</text>
+  <text x="990" y="640" class="small">local / S3 / MinIO (опц.)</text>
+  <text x="990" y="665" class="small">integrity + encryption</text>
+
+  <!-- Arrows -->
+  <line x1="130" y1="416" x2="190" y2="475" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="150" y="410" class="hint">inotify/events</text>
+
+  <line x1="500" y1="295" x2="570" y2="330" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="505" y="285" class="hint">traps</text>
+
+  <line x1="500" y1="475" x2="570" y2="370" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="505" y="470" class="hint">event</text>
+
+  <line x1="900" y1="330" x2="970" y2="305" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="905" y="320" class="hint">trigger isolation</text>
+
+  <line x1="900" y1="450" x2="970" y2="420" class="arrow dashed" marker-end="url(#arrowhead)"/>
+  <text x="905" y="445" class="hint">telemetry</text>
+
+  <line x1="735" y1="500" x2="735" y2="540" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="745" y="522" class="hint">status</text>
+
+  <line x1="1120" y1="540" x2="1120" y2="580" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="1132" y="565" class="hint">evidence</text>
+
+  <line x1="1270" y1="350" x2="1410" y2="425" class="arrow dashed" marker-end="url(#arrowhead)"/>
+  <text x="1280" y="340" class="hint">Docker API</text>
+</svg>

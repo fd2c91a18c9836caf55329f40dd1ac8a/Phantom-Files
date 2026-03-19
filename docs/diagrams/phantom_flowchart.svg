@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+  <defs>
+    <style>
+      .title { font: 700 20px "Helvetica", "Arial", sans-serif; fill: #0f172a; }
+      .label { font: 600 13px "Helvetica", "Arial", sans-serif; fill: #0f172a; }
+      .small { font: 500 12px "Helvetica", "Arial", sans-serif; fill: #0f172a; }
+      .box { fill: #f8fafc; stroke: #0f172a; stroke-width: 1.6; rx: 10; ry: 10; }
+      .diamond { fill: #fff7ed; stroke: #0f172a; stroke-width: 1.6; }
+      .panel { fill: #dbeafe; stroke: #1e3a8a; stroke-width: 2; rx: 18; ry: 18; }
+      .arrow { stroke: #0f172a; stroke-width: 2; fill: none; }
+      .dashed { stroke-dasharray: 6 6; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="1600" fill="#ffffff"/>
+  <rect x="40" y="40" width="1120" height="1520" fill="#ffffff" stroke="#0f172a" stroke-width="2" rx="18" ry="18"/>
+  <text x="600" y="85" class="title" text-anchor="middle">Phantom Files Daemon — алгоритм работы</text>
+
+  <!-- Start -->
+  <ellipse cx="600" cy="140" rx="260" ry="32" class="box"/>
+  <text x="600" y="145" class="label" text-anchor="middle">Запуск службы Phantom Files Daemon</text>
+
+  <!-- Boxes -->
+  <rect x="320" y="200" width="560" height="52" class="box"/>
+  <text x="600" y="230" class="label" text-anchor="middle">Загрузка конфигурации и манифестов</text>
+
+  <rect x="320" y="270" width="560" height="52" class="box"/>
+  <text x="600" y="300" class="label" text-anchor="middle">Инициализация фабрики ловушек и легенды</text>
+
+  <rect x="320" y="340" width="560" height="52" class="box"/>
+  <text x="600" y="370" class="label" text-anchor="middle">Генерация и размещение полиморфных ловушек</text>
+
+  <rect x="320" y="410" width="560" height="52" class="box"/>
+  <text x="600" y="440" class="label" text-anchor="middle">Time stomping (anti-forensics)</text>
+
+  <rect x="320" y="480" width="560" height="52" class="box"/>
+  <text x="600" y="510" class="label" text-anchor="middle">Обновление реестра ловушек</text>
+
+  <rect x="320" y="550" width="560" height="52" class="box"/>
+  <text x="600" y="580" class="label" text-anchor="middle">Инициализация сенсоров: fanotify + eBPF, fallback inotify</text>
+
+  <rect x="320" y="620" width="560" height="52" class="box"/>
+  <text x="600" y="650" class="label" text-anchor="middle">Ожидание событий файловой системы</text>
+
+  <!-- Diamond 1 -->
+  <polygon points="600,710 740,770 600,830 460,770" class="diamond"/>
+  <text x="600" y="775" class="label" text-anchor="middle">Доступ к ловушке?</text>
+
+  <!-- Dedup / Context -->
+  <rect x="320" y="860" width="560" height="52" class="box"/>
+  <text x="600" y="890" class="label" text-anchor="middle">Дедупликация и формирование контекста инцидента</text>
+
+  <rect x="320" y="930" width="560" height="52" class="box"/>
+  <text x="600" y="958" class="label" text-anchor="middle">Сбор телеметрии: процесс / ФС / сеть (PCAP опц.)</text>
+
+  <rect x="320" y="1000" width="560" height="52" class="box"/>
+  <text x="600" y="1030" class="label" text-anchor="middle">Решение по политике (OODA)</text>
+
+  <rect x="320" y="1070" width="560" height="52" class="box"/>
+  <text x="600" y="1098" class="label" text-anchor="middle">Выполнение действий: alert / forensics / isolate / block / kill</text>
+
+  <!-- Diamond 2 -->
+  <polygon points="600,1130 740,1180 600,1230 460,1180" class="diamond"/>
+  <text x="600" y="1185" class="label" text-anchor="middle">Требуется блокировка/изоляция?</text>
+
+  <rect x="320" y="1260" width="560" height="52" class="box"/>
+  <text x="600" y="1290" class="label" text-anchor="middle">Изоляция/блокировка (SIGSTOP / cgroup eBPF / nftables)</text>
+
+  <!-- Diamond 3 -->
+  <polygon points="600,1328 740,1378 600,1428 460,1378" class="diamond"/>
+  <text x="600" y="1383" class="label" text-anchor="middle">Sandbox включен и Docker доступен?</text>
+
+  <rect x="320" y="1430" width="560" height="52" class="box"/>
+  <text x="600" y="1460" class="label" text-anchor="middle">Запуск контейнерного анализа и сбор артефактов</text>
+
+  <rect x="320" y="1496" width="560" height="52" class="box"/>
+  <text x="600" y="1524" class="label" text-anchor="middle">Сохранение улик и аудит (audit.jsonl, storage)</text>
+
+  <!-- Arrows main flow -->
+  <line x1="600" y1="172" x2="600" y2="200" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="252" x2="600" y2="270" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="322" x2="600" y2="340" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="392" x2="600" y2="410" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="462" x2="600" y2="480" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="532" x2="600" y2="550" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="602" x2="600" y2="620" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="672" x2="600" y2="710" class="arrow" marker-end="url(#arrowhead)"/>
+
+  <line x1="600" y1="830" x2="600" y2="860" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="912" x2="600" y2="930" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="982" x2="600" y2="1000" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="1052" x2="600" y2="1070" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="1122" x2="600" y2="1130" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="1230" x2="600" y2="1260" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="1312" x2="600" y2="1328" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="1428" x2="600" y2="1430" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="600" y1="1482" x2="600" y2="1496" class="arrow" marker-end="url(#arrowhead)"/>
+
+  <!-- No path back to wait -->
+  <line x1="740" y1="770" x2="980" y2="770" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="980" y1="770" x2="980" y2="646" class="arrow"/>
+  <line x1="980" y1="646" x2="880" y2="646" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="800" y="760" class="small">Нет</text>
+
+  <!-- No block path -->
+  <line x1="740" y1="1180" x2="980" y2="1180" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="980" y1="1180" x2="980" y2="1388" class="arrow"/>
+  <line x1="980" y1="1388" x2="740" y2="1388" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="800" y="1172" class="small">Нет</text>
+
+  <!-- No sandbox path -->
+  <line x1="740" y1="1378" x2="980" y2="1378" class="arrow" marker-end="url(#arrowhead)"/>
+  <line x1="980" y1="1378" x2="980" y2="1496" class="arrow"/>
+  <line x1="980" y1="1496" x2="880" y2="1496" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="800" y="1370" class="small">Нет</text>
+</svg>
