@@ -15,12 +15,17 @@ def ecs_dict_from_record(record: logging.LogRecord) -> Dict[str, Any]:
     Преобразование LogRecord в минимальный ECS-совместимый словарь.
     """
     timestamp = datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat()
+    # M7 fix: socket.gethostname() может выбросить исключение
+    try:
+        hostname = socket.gethostname()
+    except Exception:
+        hostname = "unknown"
     return {
         "@timestamp": timestamp,
         "log.level": record.levelname.lower(),
         "log.logger": record.name,
         "message": record.getMessage(),
-        "host": {"hostname": socket.gethostname()},
+        "host": {"hostname": hostname},
         "event": {"severity": record.levelno},
     }
 

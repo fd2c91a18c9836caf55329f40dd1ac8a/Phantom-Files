@@ -30,33 +30,33 @@ contents:
     dst: /etc/phantom/phantom.yaml
     type: config
     file_info:
-      mode: 0600
-      owner: phantom
-      group: phantom
+      mode: 0640
+      owner: root
+      group: phantom-user
 
   - src: config/policies.yaml
     dst: /etc/phantom/policies.yaml
     type: config
     file_info:
-      mode: 0600
-      owner: phantom
-      group: phantom
+      mode: 0640
+      owner: root
+      group: phantom-user
 
   - src: config/traps_manifest.yaml
     dst: /etc/phantom/traps_manifest.yaml
     type: config
     file_info:
-      mode: 0600
-      owner: phantom
-      group: phantom
+      mode: 0640
+      owner: root
+      group: phantom-user
 
   - src: config/logging.yaml
     dst: /etc/phantom/logging.yaml
     type: config
     file_info:
-      mode: 0644
-      owner: phantom
-      group: phantom
+      mode: 0640
+      owner: root
+      group: phantom-user
 
   # Шаблоны
   - src: resources/templates/**
@@ -77,28 +77,42 @@ contents:
     file_info:
       mode: 0750
       owner: phantom
-      group: phantom
+      group: phantom-user
 
   - dst: /var/lib/phantom/evidence
     type: dir
     file_info:
       mode: 0700
       owner: phantom
-      group: phantom
+      group: phantom-user
 
   - dst: /var/log/phantom
     type: dir
     file_info:
       mode: 0750
       owner: phantom
-      group: phantom
+      group: phantom-user
+
+  - dst: /etc/phantom
+    type: dir
+    file_info:
+      mode: 0750
+      owner: root
+      group: phantom-user
+
+  - dst: /etc/phantom/keys
+    type: dir
+    file_info:
+      mode: 0750
+      owner: root
+      group: phantom-user
 
   - dst: /etc/phantom/templates
     type: dir
     file_info:
       mode: 0750
-      owner: phantom
-      group: phantom
+      owner: root
+      group: phantom-user
 
 scripts:
   preinstall: deploy/scripts/preinstall.sh

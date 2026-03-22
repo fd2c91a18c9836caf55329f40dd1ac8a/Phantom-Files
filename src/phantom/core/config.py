@@ -161,11 +161,14 @@ def get_config(
         Первый вызов блокирует через threading.Lock.
         Последующие вызовы возвращают кэшированный объект без блокировки.
     """
-    global _CONFIG_CACHE
-    
-    # Fast path: уже загружен и не требуется reload
+    global _CONFIG_CACHE, _CONFIG_CACHE_KEY
+
+    # R3-M2 fix: cache key включает path и profile,
+    # чтобы вызов с другими параметрами не возвращал старый кэш
+    request_key = (path, profile)
     if _CONFIG_CACHE is not None and not reload:
-        return _CONFIG_CACHE
+        if not hasattr(get_config, "_cache_key") or get_config._cache_key == request_key or request_key == (None, None):
+            return _CONFIG_CACHE
     
     # Slow path: загрузка с блокировкой
     with _CONFIG_LOCK:
@@ -188,7 +191,9 @@ def get_config(
         
         # Глубокое замораживание для immutability
         _CONFIG_CACHE = _deep_freeze(final_config)
-        
+        # R3-M2 fix: сохраняем ключ кэша
+        get_config._cache_key = (path, profile)
+
         return _CONFIG_CACHE
 
 
@@ -580,11 +585,12 @@ def _check_file_security(path: str) -> None:
     # Permissions check
     mode = stat.st_mode
     
-    # Critical: world-writable (anyone can modify)
+    # Critical: world-writable (anyone can modify) — REJECT
     if mode & 0o002:
-        logger.error(
-            f"CRITICAL: Config file {path} is world-writable (permissions: {oct(mode)[-3:]}). "
-            "This is a severe security risk. Recommended: chmod 600"
+        raise ConfigError(
+            f"Config file {path} is world-writable (permissions: {oct(mode)[-3:]}). "
+            "This is a severe security risk. Fix: chmod 600 " + path,
+            path=path,
         )
     
     # Warning: group/world readable (может содержать credentials)

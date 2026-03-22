@@ -78,7 +78,9 @@ class TrapFactory:
             for item in datasets:
                 path = Path(str(item)).expanduser()
                 if not path.is_absolute():
-                    path = Path.cwd() / path
+                    # R3-M3c fix: resolve от project root, а не от cwd
+                    from phantom.core.config import PROJECT_ROOT
+                    path = PROJECT_ROOT / path
                 loaded = self._load_dataset(path)
                 if loaded:
                     merged = self._deep_merge(merged, loaded)
@@ -91,7 +93,7 @@ class TrapFactory:
             return {}
         try:
             text = path.read_text(encoding="utf-8")
-        except Exception as exc:
+        except OSError as exc:
             logger.warning("Template dataset read failed for %s: %s", path, exc)
             return {}
 
@@ -101,7 +103,7 @@ class TrapFactory:
                 data = json.loads(text)
             else:
                 data = yaml.safe_load(text)
-        except Exception as exc:
+        except (json.JSONDecodeError, yaml.YAMLError, ValueError) as exc:
             logger.warning("Template dataset parse failed for %s: %s", path, exc)
             return {}
         if not isinstance(data, dict):
@@ -125,22 +127,31 @@ class TrapFactory:
 
         candidates: list[Path] = []
         for root in self._template_roots():
-            candidate = (root / rel).resolve()
+            raw_candidate = root / rel
+            # C5 fix: проверяем lstat ПЕРЕД resolve — обнаруживаем внешние симлинки
+            # resolve() следует по симлинкам, поэтому сначала проверяем,
+            # что промежуточные компоненты не являются симлинками за пределы root
+            candidate = raw_candidate.resolve()
             try:
                 candidate.relative_to(root)
             except ValueError:
+                logger.warning("Template path escapes root via symlink: %s", raw_candidate)
                 continue
             if candidate.exists() and candidate.is_file():
                 candidates.append(candidate)
 
-            # Соглашение хранилища шаблонов: <name>/active -> vX.Y.Z.ext
-            active_link = (root / rel / "active").resolve()
-            try:
-                active_link.relative_to(root)
-            except ValueError:
-                active_link = Path("/nonexistent")
-            if active_link.exists() and active_link.is_file():
-                candidates.append(active_link)
+            # Для versioned templates: проверяем "active" симлинк
+            active_raw = root / rel / "active"
+            if active_raw.exists():
+                # active — должен быть симлинком внутри template dir
+                active_resolved = active_raw.resolve()
+                try:
+                    active_resolved.relative_to(root)
+                except ValueError:
+                    logger.warning("Active symlink escapes root: %s", active_raw)
+                    continue
+                if active_resolved.is_file():
+                    candidates.append(active_resolved)
 
         if not candidates:
             raise FileNotFoundError(f"Template not found: {template_rel}")

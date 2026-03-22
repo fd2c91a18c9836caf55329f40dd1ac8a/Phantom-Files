@@ -63,10 +63,20 @@ def test_base64_encoder_chunks():
 
 def test_encrypt_no_key_returns_path(tmp_path, monkeypatch):
     storage = _make_storage()
+    storage._require_encryption = False
     monkeypatch.delenv(storage._encryption_key_env, raising=False)
     src = _make_file(tmp_path, "bundle.tar.gz", b"data")
     out = storage._encrypt_if_configured(src)
     assert out == src
+
+
+def test_encrypt_no_key_fails_when_encryption_required(tmp_path, monkeypatch):
+    storage = _make_storage()
+    storage._require_encryption = True
+    monkeypatch.delenv(storage._encryption_key_env, raising=False)
+    src = _make_file(tmp_path, "bundle.tar.gz", b"data")
+    out = storage._encrypt_if_configured(src)
+    assert out is None
 
 
 def test_encrypt_valid_key_creates_bundle(tmp_path, monkeypatch):

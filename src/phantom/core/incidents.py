@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Optional, Tuple
 
 from phantom.core.state import Event, generate_incident_id
@@ -87,11 +87,10 @@ class IncidentStore:
             return list(self._records.values())
 
     def _evict_oldest(self) -> None:
-        oldest_key: Optional[Tuple[str, Optional[int]]] = None
-        oldest_ts = datetime.now(timezone.utc)
-        for key, record in self._records.items():
-            if record.last_seen <= oldest_ts:
-                oldest_ts = record.last_seen
-                oldest_key = key
-        if oldest_key is not None:
-            del self._records[oldest_key]
+        # NEW-C2 fix: min() гарантирует нахождение oldest даже при рассинхронизации часов
+        if not self._records:
+            return
+        oldest_key = min(self._records, key=lambda k: self._records[k].last_seen)
+        evicted = self._records.pop(oldest_key)
+        evicted.status = "evicted"
+        self._archived.append(evicted)

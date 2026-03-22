@@ -51,6 +51,8 @@ orchestrator:
 forensics:
   timeout_seconds: 60
   memory_dump: true
+  # Сбор /proc/<pid>/environ может содержать секреты, поэтому выключен по умолчанию.
+  collect_process_environ: false
   chain_state_file: "/var/lib/phantom/evidence/chain_state.json"
   s3:
     enabled: false
@@ -62,6 +64,8 @@ forensics:
     secret_key_env: "PHANTOM_S3_SECRET_KEY"
     # Base64 ключ AES-256-GCM (после декодирования 32 байта). Невалидный ключ => загрузка прекращается.
     encryption_key_env: "PHANTOM_EVIDENCE_KEY_B64"
+    # Без ключа шифрования выгрузка в S3 блокируется (fail-closed).
+    require_encryption: true
     verify_tls: true
     object_lock_days: 90
     upload_timeout_seconds: 30
@@ -116,6 +120,8 @@ api:
   bind: "127.0.0.1"
   port: 8787
   security_mode: "api_key" # mtls | api_key | jwt | both
+  # Общий секрет между reverse-proxy и API для подтверждения mTLS-статуса.
+  mtls_proxy_token_env: "PHANTOM_MTLS_PROXY_TOKEN"
   api_key_env: "PHANTOM_API_KEY"
   keys:
     - env: "PHANTOM_API_KEY_ADMIN"

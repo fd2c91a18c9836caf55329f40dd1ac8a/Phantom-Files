@@ -10,10 +10,11 @@ if command -v pip3 >/dev/null 2>&1; then
 fi
 
 # Установка прав на директории
-chown -R phantom:phantom /var/lib/phantom /var/log/phantom /etc/phantom
-chmod 0750 /var/lib/phantom /var/log/phantom
+chown -R phantom:phantom-user /var/lib/phantom /var/log/phantom
+chown -R root:phantom-user /etc/phantom
+chmod 0750 /var/lib/phantom /var/log/phantom /etc/phantom
 chmod 0700 /var/lib/phantom/evidence 2>/dev/null || true
-chmod 0600 /etc/phantom/phantom.yaml /etc/phantom/policies.yaml 2>/dev/null || true
+chmod 0640 /etc/phantom/phantom.yaml /etc/phantom/policies.yaml /etc/phantom/traps_manifest.yaml /etc/phantom/logging.yaml 2>/dev/null || true
 
 # Создание secrets.env если не существует
 if [ ! -f /etc/phantom/secrets.env ]; then
@@ -24,8 +25,14 @@ if [ ! -f /etc/phantom/secrets.env ]; then
 # PHANTOM_TELEGRAM_BOT_TOKEN=
 # PHANTOM_TELEGRAM_CHAT_ID=
 EOF
-    chown phantom:phantom /etc/phantom/secrets.env
-    chmod 0600 /etc/phantom/secrets.env
+    chown root:root /etc/phantom/secrets.env
+    chmod 0400 /etc/phantom/secrets.env
+fi
+
+# Секреты всегда храним только для root.
+if [ -f /etc/phantom/secrets.env ]; then
+    chown root:root /etc/phantom/secrets.env
+    chmod 0400 /etc/phantom/secrets.env
 fi
 
 # Перезагрузка systemd

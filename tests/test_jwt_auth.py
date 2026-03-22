@@ -132,6 +132,17 @@ def test_refresh_with_access_token_fails():
     assert p.refresh(access) is None
 
 
+def test_refresh_token_revocation_persists_between_provider_instances(tmp_path):
+    store = tmp_path / "revoked.json"
+    p1 = _provider(revoked_store_path=str(store))
+    pair = p1.issue_token_pair("user1", "admin")
+    assert p1.refresh(pair["refresh_token"]) is not None
+
+    # Имитация рестарта сервиса: новый инстанс должен подхватить revoked_jti.
+    p2 = _provider(revoked_store_path=str(store))
+    assert p2.refresh(pair["refresh_token"]) is None
+
+
 # ---------- Отзыв ----------
 
 def test_revoke_token():

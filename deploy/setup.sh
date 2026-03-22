@@ -4,25 +4,25 @@ set -euo pipefail
 PROJECT_DIR="${1:-/opt/phantom}"
 
 echo "[*] Ensuring service user/groups"
-if ! getent group phantom >/dev/null 2>&1; then
-  sudo groupadd --system phantom
-fi
 if ! getent group phantom-admin >/dev/null 2>&1; then
   sudo groupadd --system phantom-admin
+fi
+if ! getent group phantom-editor >/dev/null 2>&1; then
+  sudo groupadd --system phantom-editor
 fi
 if ! getent group phantom-user >/dev/null 2>&1; then
   sudo groupadd --system phantom-user
 fi
 if ! id phantom >/dev/null 2>&1; then
-  sudo useradd --system --no-create-home --shell /usr/sbin/nologin --gid phantom phantom
+  sudo useradd --system --no-create-home --shell /usr/sbin/nologin --gid phantom-user --groups phantom-admin phantom
 fi
 
 echo "[*] Preparing runtime directories"
-sudo install -d -m 0750 -o phantom -g phantom /var/lib/phantom/traps
-sudo install -d -m 0750 -o phantom -g phantom /var/lib/phantom/evidence
-sudo install -d -m 0750 -o phantom -g phantom /var/log/phantom
-sudo install -d -m 0750 -o root -g phantom /etc/phantom/templates
-sudo install -d -m 0750 -o root -g phantom /etc/phantom/keys
+sudo install -d -m 0750 -o phantom -g phantom-user /var/lib/phantom/traps
+sudo install -d -m 0750 -o phantom -g phantom-user /var/lib/phantom/evidence
+sudo install -d -m 0750 -o phantom -g phantom-user /var/log/phantom
+sudo install -d -m 0750 -o root -g phantom-user /etc/phantom/templates
+sudo install -d -m 0750 -o root -g phantom-user /etc/phantom/keys
 
 if [ ! -f /etc/phantom/secrets.env ]; then
   echo "[*] Creating /etc/phantom/secrets.env template"

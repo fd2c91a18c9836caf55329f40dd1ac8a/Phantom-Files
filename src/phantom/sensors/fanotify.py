@@ -255,6 +255,7 @@ class FanotifySensor(Sensor):
     def _handle_single_event(self, mask: int, event_fd: int, pid: int) -> None:
         path: Optional[str] = None
         is_perm_event = False
+        perm_responded = False  # C7 fix: предотвращает повторную отправку permission response
         try:
             path = str(Path(f"/proc/self/fd/{event_fd}").resolve())
             trap = self._registry.lookup(path)
@@ -263,6 +264,7 @@ class FanotifySensor(Sensor):
             if trap is None:
                 if is_perm_event:
                     self._send_permission_response(event_fd, True)
+                    perm_responded = True
                 return
 
             proc_name = (_process_name(pid) or "").strip()
@@ -270,6 +272,7 @@ class FanotifySensor(Sensor):
             if proc_name.lower() in self._whitelist_process_names:
                 if is_perm_event:
                     self._send_permission_response(event_fd, True)
+                    perm_responded = True
                 event = Event(
                     event_type=_event_type_from_mask(mask),
                     target_path=path,
@@ -301,16 +304,18 @@ class FanotifySensor(Sensor):
                 timeout = max(1, self._permission_timeout_ms) / 1000.0
                 allow = self._permission_decision(event, timeout_seconds=timeout)
                 self._send_permission_response(event_fd, allow)
+                perm_responded = True
 
             # Всегда отправляем событие в конвейер аудита/реагирования.
             asyncio.run_coroutine_threadsafe(self._callback(event), self._loop)
         except Exception as exc:
             logger.error("fanotify event handler failed (pid=%s path=%s): %s", pid, path, exc)
-            try:
-                if is_perm_event:
+            # C7 fix: отправляем deny только если ответ ещё не был отправлен
+            if is_perm_event and not perm_responded:
+                try:
                     self._send_permission_response(event_fd, False)
-            except Exception:
-                pass
+                except Exception:
+                    pass
         finally:
             try:
                 os.close(event_fd)

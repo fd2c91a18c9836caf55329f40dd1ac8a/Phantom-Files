@@ -38,7 +38,11 @@ def _require_root() -> None:
 
 
 def _run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    # NEW-H1 fix: timeout=30 чтобы не повиснуть навсегда
+    try:
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired as exc:
+        raise BootstrapError(f"Command timed out after 30s: {cmd!r}") from exc
     if proc.returncode != 0:
         raise BootstrapError((proc.stderr or proc.stdout or "").strip() or f"Command failed: {cmd!r}")
 
@@ -106,8 +110,19 @@ def ensure_dir(path: str, *, owner_user: str, owner_group: str, mode: int) -> No
 
     uid = pwd.getpwnam(owner_user).pw_uid
     gid = grp.getgrnam(owner_group).gr_gid
-    os.chown(p, uid, gid)
-    os.chmod(p, mode)
+    # M5 fix: используем fd-based операции для защиты от TOCTOU
+    # O_NOFOLLOW предотвращает подмену симлинком между mkdir и chmod/chown
+    try:
+        dir_fd = os.open(str(p), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fchown(dir_fd, uid, gid)
+            os.fchmod(dir_fd, mode)
+        finally:
+            os.close(dir_fd)
+    except OSError:
+        # Fallback для систем без O_NOFOLLOW/O_DIRECTORY
+        os.chown(str(p), uid, gid)
+        os.chmod(str(p), mode)
 
 
 def _iter_bootstrap_dirs(cfg: dict) -> list[str]:

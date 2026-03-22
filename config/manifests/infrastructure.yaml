@@ -1,4 +1,3 @@
-# Манифест ловушек: инфраструктурные конфигурации
 traps:
   - id: trap-db-prod-01
     template: text/prod_db_config.json.j2

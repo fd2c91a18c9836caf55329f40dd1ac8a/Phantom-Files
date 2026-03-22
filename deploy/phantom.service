@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=phantom
-Group=phantom
+Group=phantom-user
 WorkingDirectory=/opt/phantom
 EnvironmentFile=/etc/phantom/secrets.env
 Environment=PYTHONPATH=/opt/phantom/src
@@ -17,11 +17,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/phantom /var/log/phantom /etc/phantom
+ReadWritePaths=/var/lib/phantom /var/log/phantom
 CapabilityBoundingSet=CAP_BPF CAP_NET_ADMIN CAP_SYS_PTRACE CAP_KILL CAP_PERFMON
 AmbientCapabilities=CAP_BPF CAP_NET_ADMIN CAP_SYS_PTRACE CAP_KILL CAP_PERFMON
 LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
-

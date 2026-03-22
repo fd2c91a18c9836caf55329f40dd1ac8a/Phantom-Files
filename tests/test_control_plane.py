@@ -148,14 +148,14 @@ def test_policy_cooldown(tmp_path):
 def test_create_block_invalid_kind(tmp_path):
     cp, loop, _ = _make_control(tmp_path)
     with pytest.raises(ValueError, match="kind"):
-        cp.create_block({"kind": "invalid", "targets": ["1.2.3.4"]}, role="admin")
+        loop.run_until_complete(cp.create_block({"kind": "invalid", "targets": ["1.2.3.4"]}, role="admin"))
     loop.close()
 
 
 def test_create_block_empty_targets(tmp_path):
     cp, loop, _ = _make_control(tmp_path)
     with pytest.raises(ValueError, match="targets"):
-        cp.create_block({"kind": "ip", "targets": []}, role="admin")
+        loop.run_until_complete(cp.create_block({"kind": "ip", "targets": []}, role="admin"))
     loop.close()
 
 

@@ -55,6 +55,7 @@ class ForensicsCollector:
 
         self._max_seconds = int(forensics_cfg.get("timeout_seconds", 60))
         self._memory_dump_enabled = bool(forensics_cfg.get("memory_dump", True))
+        self._collect_process_environ = bool(forensics_cfg.get("collect_process_environ", False))
         self._chain_state_file = Path(str(forensics_cfg.get("chain_state_file", self._base / "chain_state.json")))
         pcap_cfg = forensics_cfg.get("pcap_precapture", {})
         self._pcap_enabled = bool(pcap_cfg.get("enabled", True))
@@ -127,7 +128,14 @@ class ForensicsCollector:
 
         await asyncio.to_thread(self._copy_text_file, proc_dir / "status", out_dir / "status.txt")
         await asyncio.to_thread(self._copy_text_file, proc_dir / "cmdline", out_dir / "cmdline.txt", binary=True)
-        await asyncio.to_thread(self._copy_text_file, proc_dir / "environ", out_dir / "environ.txt", binary=True)
+        if self._collect_process_environ:
+            await asyncio.to_thread(self._copy_text_file, proc_dir / "environ", out_dir / "environ.txt", binary=True)
+        else:
+            await asyncio.to_thread(
+                self._write_json,
+                out_dir / "environ.txt",
+                {"status": "skipped", "reason": "collect_process_environ=false"},
+            )
         await asyncio.to_thread(self._copy_text_file, proc_dir / "maps", out_dir / "maps.txt")
         await asyncio.to_thread(self._copy_text_file, proc_dir / "cgroup", out_dir / "cgroup.txt")
         await asyncio.to_thread(self._dump_fd_links, proc_dir / "fd", out_dir / "fd_links.json")
@@ -459,15 +467,19 @@ class ForensicsCollector:
                     import fcntl  # type: ignore
 
                     fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-                except Exception:
-                    pass
+                except ImportError:
+                    logger.warning("fcntl unavailable; chain state file lock not acquired")
+                except Exception as lock_exc:
+                    logger.error("Failed to acquire fcntl lock on chain state file: %s", lock_exc)
                 yield fh
                 try:
                     import fcntl  # type: ignore
 
                     fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-                except Exception:
+                except ImportError:
                     pass
+                except Exception as unlock_exc:
+                    logger.warning("Failed to release fcntl lock on chain state file: %s", unlock_exc)
         except Exception as exc:
             logger.error("Failed to acquire chain state file lock: %s", exc)
             raise
@@ -487,7 +499,8 @@ class ForensicsCollector:
             else:
                 dst.write_text(src.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
         except Exception as exc:
-            dst.write_text(f"error: {exc}\n", encoding="utf-8")
+            # NEW-M12 fix: санитизация исключений — только тип и краткое описание
+            dst.write_text(f"error: {type(exc).__name__}\n", encoding="utf-8")
 
     def _dump_fd_links(self, fd_dir: Path, output: Path) -> None:
         payload: list[dict[str, Any]] = []
@@ -498,7 +511,8 @@ class ForensicsCollector:
             try:
                 payload.append({"fd": child.name, "target": os.readlink(str(child))})
             except Exception as exc:
-                payload.append({"fd": child.name, "error": str(exc)})
+                # NEW-M12 fix: не раскрываем полную ошибку
+                payload.append({"fd": child.name, "error": type(exc).__name__})
         self._write_json(output, payload)
 
     def _dump_ns_ids(self, ns_dir: Path, output: Path) -> None:
@@ -510,7 +524,8 @@ class ForensicsCollector:
             try:
                 payload[child.name] = os.readlink(str(child))
             except Exception as exc:
-                payload[child.name] = f"error:{exc}"
+                # NEW-M12 fix: не раскрываем полную ошибку
+                payload[child.name] = f"error:{type(exc).__name__}"
         self._write_json(output, payload)
 
     def _dump_exe_metadata(self, exe_link: Path, output: Path) -> None:

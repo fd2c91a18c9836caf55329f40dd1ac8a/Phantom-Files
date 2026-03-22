@@ -291,14 +291,21 @@ class PersistenceScanner:
             ]
 
             if keys:
+                import time as _time
+                # H10 fix: файл, изменённый менее 24 часов назад — подозрительнее
+                recently_modified = (_time.time() - stat.st_mtime) < 86400
                 # Каждый ключ — потенциальная точка возврата
                 for key_line in keys:
                     # Извлекаем комментарий (обычно email или hostname)
                     parts = key_line.split()
                     comment = parts[-1] if len(parts) >= 3 else "unknown"
+                    # H10 fix: severity зависит от давности изменения файла.
+                    # Недавно изменённый = high (вероятно добавлен атакующим).
+                    # Давно существующий = medium (может быть легитимным).
+                    severity = "high" if recently_modified else "medium"
                     findings.append(PersistenceFinding(
                         category="ssh_key",
-                        severity="high",
+                        severity=severity,
                         path=str(auth_keys),
                         detail=f"SSH key: {comment} (key_type={parts[0] if parts else 'unknown'})",
                         user=username,
@@ -462,8 +469,12 @@ class PersistenceScanner:
 
         # Проверяем /proc на процессы этого UID
         try:
+            import time as _time
             count = 0
             for pid_dir in Path("/proc").iterdir():
+                # NEW-M10 fix: проверяем deadline при обходе /proc
+                if _time.monotonic() >= deadline:
+                    break
                 if not pid_dir.name.isdigit():
                     continue
                 try:
@@ -607,8 +618,18 @@ class PersistenceScanner:
                 ["pkill", "-KILL", "-u", username],
                 check=False, capture_output=True, timeout=5,
             )
-            logger.info("Killed all sessions for user %s", username)
-            return 1  # Как минимум одна попытка
+            # R3-M1 fix: проверяем остались ли процессы после kill
+            try:
+                proc_check = subprocess.run(
+                    ["pgrep", "-c", "-u", username],
+                    check=False, capture_output=True, text=True, timeout=5,
+                )
+                remaining = int(proc_check.stdout.strip()) if proc_check.returncode == 0 else 0
+            except Exception:
+                remaining = -1  # неизвестно
+            logger.info("Killed sessions for user %s (remaining processes: %s)", username, remaining)
+            # R3-M1 fix: 1 = все убиты, 0 = остались процессы
+            return 1 if remaining == 0 else 0
         except Exception as exc:
             logger.error("Failed to kill sessions for %s: %s", username, exc)
             return 0

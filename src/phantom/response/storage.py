@@ -53,6 +53,7 @@ class EvidenceStorage:
         self._bucket = str(self._s3_cfg.get("bucket", "")).strip()
         self._prefix = str(self._s3_cfg.get("prefix", "evidence")).strip().strip("/")
         self._encryption_key_env = str(self._s3_cfg.get("encryption_key_env", "PHANTOM_EVIDENCE_KEY_B64"))
+        self._require_encryption = bool(self._s3_cfg.get("require_encryption", self._enabled))
         self._object_lock_days = int(self._s3_cfg.get("object_lock_days", 90))
         self._upload_timeout = int(self._s3_cfg.get("upload_timeout_seconds", 30))
 
@@ -117,6 +118,12 @@ class EvidenceStorage:
     def _encrypt_if_configured(self, path: Path) -> Optional[Path]:
         key_raw = os.getenv(self._encryption_key_env, "").strip()
         if not key_raw:
+            if self._require_encryption:
+                logger.error(
+                    "Evidence encryption key is missing (%s), upload aborted",
+                    self._encryption_key_env,
+                )
+                return None
             return path
         try:
             key = base64.b64decode(key_raw, validate=True)

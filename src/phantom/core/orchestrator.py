@@ -219,23 +219,23 @@ class DecisionEngine:
                 params["ip_block_ttl_seconds"] = policy.get("ip_block_ttl_seconds")
             rationale.append(f"policy={policy.get('description', 'loaded')}")
 
-        if self._config.mode == RunMode.DRY_RUN:
+        if self._config.mode in {RunMode.DRY_RUN, RunMode.OBSERVATION}:
+            # R3-M4 fix: defense-in-depth — фильтруем деструктивные действия
+            # на уровне DecisionEngine, не полагаясь только на Dispatcher gate
+            _DESTRUCTIVE = frozenset({
+                ResponseAction.ISOLATE_PROCESS,
+                ResponseAction.BLOCK_NETWORK,
+                ResponseAction.BLOCK_IP,
+                ResponseAction.KILL_PROCESS,
+                ResponseAction.QUARANTINE_FILE,
+                ResponseAction.SCAN_PERSISTENCE,
+                ResponseAction.KILL_USER_SESSIONS,
+            })
+            actions = [a for a in actions if a not in _DESTRUCTIVE]
             if ResponseAction.COLLECT_FORENSICS not in actions:
                 actions.append(ResponseAction.COLLECT_FORENSICS)
-            rationale.append("dry_run_no_block")
-            return Decision.from_context(
-                context=context,
-                actions=tuple(actions),
-                rationale=";".join(rationale),
-                auto_execute=self._config.auto_execute,
-                action_params=params,
-                mode=self._config.mode,
-            )
-
-        if self._config.mode == RunMode.OBSERVATION:
-            if ResponseAction.COLLECT_FORENSICS not in actions:
-                actions.append(ResponseAction.COLLECT_FORENSICS)
-            rationale.append("observation_mode")
+            mode_label = "dry_run_no_block" if self._config.mode == RunMode.DRY_RUN else "observation_mode"
+            rationale.append(mode_label)
             return Decision.from_context(
                 context=context,
                 actions=tuple(actions),
@@ -469,6 +469,11 @@ class Orchestrator:
             try:
                 await self._process_event(event)
                 await self._inc_stat("events_processed")
+            except asyncio.CancelledError:
+                raise
+            except asyncio.TimeoutError:
+                logger.error("Worker %s: event processing timed out", worker_id)
+                await self._inc_stat("errors")
             except Exception:
                 logger.exception("Worker %s failed processing event", worker_id)
                 await self._inc_stat("errors")

@@ -1,76 +1,79 @@
-import os
-import random
-import time
+"""
+Антифорензик-утилита: подделка временных меток файлов (Time Stomping).
+"""
+
+from __future__ import annotations
+
 import logging
-from typing import Optional, Dict, Any
+import os
+import secrets
+import time
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-# Инициализация логгера для модуля метаданных
-logger = logging.getLogger("Factory.Meta")
+# NEW-L1 fix: имя логгера по конвенции проекта
+logger = logging.getLogger("phantom.factory.metadata")
 
-# Значения по умолчанию для Time Stomping
 DEFAULT_MIN_DAYS = 10
 DEFAULT_MAX_DAYS = 300
 DEFAULT_ATIME_OFFSET_MIN = 5
 DEFAULT_ATIME_OFFSET_MAX = 300
+_MAX_DAYS_CAP = 10000  # NEW-H2 fix: верхняя граница для защиты от overflow
 
 
 def stomp_timestamp(
     filepath: str,
-    config: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Применяет технику Anti-Forensics: Time Stomping (подделка временных меток).
 
     Изменяет время последнего доступа (atime) и модификации (mtime) файла,
-    сдвигая их в прошлое. Это создает иллюзию, что файл является "старым"
-    и легитимным артефактом системы, а не свежесозданной ловушкой.
+    сдвигая их в прошлое.
 
     Args:
-        filepath (str): Полный или относительный путь к целевому файлу.
-        config (Optional[Dict[str, Any]]): Словарь конфигурации с параметрами:
+        filepath: Полный или относительный путь к целевому файлу.
+        config: Словарь конфигурации с параметрами:
             - min_days_ago (int): Минимальный "возраст" файла в днях.
             - max_days_ago (int): Максимальный "возраст" файла в днях.
             - atime_offset_min (int): Мин. смещение atime от mtime (сек).
             - atime_offset_max (int): Макс. смещение atime от mtime (сек).
     """
-    
-    # Защита: если файла нет, просто выходим, не ломая программу
-    if not os.path.exists(filepath):
-        logger.debug(f"File not found for stomping: {filepath}")
+    # NEW-L2 fix: Path API вместо os.path
+    if not Path(filepath).exists():
+        # NEW-H2 fix: %-formatting вместо f-string
+        logger.debug("File not found for stomping: %s", filepath)
         return
 
-    # Извлекаем параметры из конфига или используем значения по умолчанию
     cfg = config or {}
-    min_days = cfg.get("min_days_ago", DEFAULT_MIN_DAYS)
-    max_days = cfg.get("max_days_ago", DEFAULT_MAX_DAYS)
-    atime_min = cfg.get("atime_offset_min", DEFAULT_ATIME_OFFSET_MIN)
-    atime_max = cfg.get("atime_offset_max", DEFAULT_ATIME_OFFSET_MAX)
+    min_days = int(cfg.get("min_days_ago", DEFAULT_MIN_DAYS))
+    max_days = int(cfg.get("max_days_ago", DEFAULT_MAX_DAYS))
+    atime_min = int(cfg.get("atime_offset_min", DEFAULT_ATIME_OFFSET_MIN))
+    atime_max = int(cfg.get("atime_offset_max", DEFAULT_ATIME_OFFSET_MAX))
+
+    # NEW-H2 fix: валидация границ
+    min_days = max(0, min(min_days, _MAX_DAYS_CAP))
+    max_days = max(min_days, min(max_days, _MAX_DAYS_CAP))
+    atime_min = max(0, atime_min)
+    atime_max = max(atime_min, atime_max)
 
     try:
-        # 1. Определяем "возраст" файла
-        days_ago = random.randint(min_days, max_days)
-        
-        # 2. Добавляем "шум" (секунды внутри суток), чтобы время не было ровно 00:00:00
+        # NEW-M1 fix: secrets вместо random для непредсказуемости timestomping
         seconds_in_day = 86400
-        noise = random.randint(0, seconds_in_day)
-        
-        # 3. Вычисляем целевое время модификации (когда файл был "написан")
+        days_ago = min_days + secrets.randbelow(max_days - min_days + 1)
+        noise = secrets.randbelow(seconds_in_day)
+
         current_time = time.time()
         mtime = current_time - (days_ago * seconds_in_day) - noise
-        
-        # 4. Вычисляем время доступа (когда файл был "прочитан")
-        # Логика: файл создали, а через N секунд проверили (cat/open).
-        # atime должен быть >= mtime.
-        atime = mtime + random.randint(atime_min, atime_max)
 
-        # 5. Применяем изменения к inode файла
+        atime_offset = atime_min + secrets.randbelow(atime_max - atime_min + 1)
+        atime = mtime + atime_offset
+
         os.utime(filepath, (atime, mtime))
-        
-        logger.debug(f"Time stomped: {os.path.basename(filepath)} -> {days_ago} days ago")
-        
-    except OSError as e:
-        # Ловим системные ошибки (например, нет прав доступа), но не прерываем работу демона
-        logger.warning(f"Failed to stomp time for {filepath}: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in metadata module: {e}")
 
+        logger.debug("Time stomped: %s -> %d days ago", Path(filepath).name, days_ago)
+
+    except OSError as exc:
+        logger.warning("Failed to stomp time for %s: %s", filepath, exc)
+    except (ValueError, OverflowError) as exc:
+        logger.error("Invalid timestomping parameters for %s: %s", filepath, exc)

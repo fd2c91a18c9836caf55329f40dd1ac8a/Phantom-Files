@@ -14,6 +14,7 @@ import asyncio
 import logging
 import os
 import random
+import stat as stat_module
 import tempfile
 import time
 from pathlib import Path
@@ -51,7 +52,8 @@ class TrapRotator:
         self._batch_size = max(1, int(cfg.get("batch_size", 5)))
         self._min_age = int(cfg.get("min_age_seconds", 1800))
         raw_cfg = get_config()
-        self._stomp_config = dict(raw_cfg.get("time_stomping", {})) if hasattr(raw_cfg, "get") else {}
+        # NEW-M3 fix: raw_cfg всегда dict, убран лишний hasattr
+        self._stomp_config = dict(raw_cfg.get("time_stomping", {}))
         self._task: Optional[asyncio.Task] = None
         self._running = False
         # Индекс round-robin
@@ -116,8 +118,12 @@ class TrapRotator:
             if not path.exists():
                 continue
             try:
-                mtime = path.stat().st_mtime
-                age = now - mtime
+                # C6 fix: lstat() — не следовать по симлинкам
+                st = path.lstat()
+                # Пропускаем симлинки — защита от подмены
+                if not stat_module.S_ISREG(st.st_mode):
+                    continue
+                age = now - st.st_mtime
                 if age >= self._min_age:
                     eligible.append(entry)
             except OSError:
@@ -154,14 +160,24 @@ class TrapRotator:
     def _rotate_single(self, entry: Any) -> None:
         """Обновление одной ловушки: перезапись содержимого + метаданные."""
         path = Path(entry.output_path)
-        if not path.exists():
+
+        # C4 fix: открываем с O_NOFOLLOW для защиты от symlink-атак (TOCTOU)
+        try:
+            src_fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            # O_NOFOLLOW на симлинке вернёт ELOOP — пропускаем
+            logger.debug("Cannot open trap for rotation (symlink or error): %s: %s", path, exc)
             return
 
-        # Читаем текущее содержимое
         try:
-            current = path.read_bytes()
-        except OSError:
-            return
+            src_stat = os.fstat(src_fd)
+            if not stat_module.S_ISREG(src_stat.st_mode):
+                return
+            current = os.read(src_fd, src_stat.st_size + 1)
+        finally:
+            os.close(src_fd)
 
         # Генерируем новое содержимое с минимальными изменениями
         # (добавляем/меняем whitespace, чтобы изменился хэш)
@@ -179,14 +195,13 @@ class TrapRotator:
                     os.fsync(fh.fileno())
                 except Exception:
                     pass
-                # Копируем метаданные (права, владелец)
-                stat = path.stat()
+                # Копируем метаданные (права, владелец) — используем уже полученный stat
                 try:
-                    os.fchmod(fh.fileno(), stat.st_mode)
+                    os.fchmod(fh.fileno(), src_stat.st_mode)
                 except Exception:
                     pass
                 try:
-                    os.fchown(fh.fileno(), stat.st_uid, stat.st_gid)
+                    os.fchown(fh.fileno(), src_stat.st_uid, src_stat.st_gid)
                 except OSError:
                     pass
             # Атомарная замена

@@ -27,7 +27,7 @@ def uuid4_str() -> str:
 
 def hash_file(path: str, algo: str) -> Optional[str]:
     file_path = Path(path)
-    if not file_path.exists():
+    if not file_path.is_file():
         return None
     hasher = hashlib.new(algo)
     with file_path.open("rb") as fh:
@@ -59,13 +59,16 @@ def sign_ed25519(private_key_pem: bytes, data: bytes, passphrase: Optional[str] 
     try:
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    except Exception as exc:
+    except ImportError as exc:
         raise RuntimeError("cryptography package is required for Ed25519 signing") from exc
 
-    key = serialization.load_pem_private_key(
-        private_key_pem,
-        password=passphrase.encode("utf-8") if passphrase else None,
-    )
+    try:
+        key = serialization.load_pem_private_key(
+            private_key_pem,
+            password=passphrase.encode("utf-8") if passphrase else None,
+        )
+    except (ValueError, TypeError, Exception) as exc:
+        raise RuntimeError(f"Failed to load Ed25519 private key: {type(exc).__name__}") from exc
     if not isinstance(key, Ed25519PrivateKey):
         raise RuntimeError("Configured key is not Ed25519")
     return key.sign(data)

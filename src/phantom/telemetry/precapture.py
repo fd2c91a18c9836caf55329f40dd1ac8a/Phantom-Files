@@ -78,7 +78,9 @@ def _extract_ports(packet: bytes) -> tuple[Optional[int], Optional[int]]:
 class PreCaptureManager:
     def __init__(self, config: Optional[Mapping[str, Any]] = None) -> None:
         self._lock = threading.Lock()
-        self._buffer: Deque[tuple[float, bytes]] = deque()
+        # M6 fix: maxlen для защиты от неограниченного роста памяти
+        # 100_000 пакетов ≈ верхний разумный предел для кольцевого буфера
+        self._buffer: Deque[tuple[float, bytes]] = deque(maxlen=100_000)
         self._bytes = 0
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -108,7 +110,8 @@ class PreCaptureManager:
         self._enabled = bool(pcap_cfg.get("enabled", True))
         self._iface = str(pcap_cfg.get("interface", "")).strip() or None
         self._source_path = str(pcap_cfg.get("ebpf_program", self._source_path))
-        self._snaplen = max(256, int(pcap_cfg.get("snaplen", 65535)))
+        # NEW-M2 fix: ограничиваем snaplen сверху для защиты от OOM
+        self._snaplen = min(65535, max(256, int(pcap_cfg.get("snaplen", 65535))))
         self._max_buffer_mb = max(8, int(pcap_cfg.get("max_buffer_mb", 64)))
         self._pre_seconds = max(0.0, float(pcap_cfg.get("pre_seconds", 30)))
         self._post_seconds = max(0.0, float(pcap_cfg.get("post_seconds", 30)))
@@ -224,6 +227,10 @@ class PreCaptureManager:
                     continue
                 ts = time.time()
                 with self._lock:
+                    # R3-M3b fix: учитываем auto-eviction из deque(maxlen=...)
+                    if len(self._buffer) == self._buffer.maxlen:
+                        evicted_ts, evicted_pkt = self._buffer[0]
+                        self._bytes -= len(evicted_pkt)
                     self._buffer.append((ts, packet))
                     self._bytes += len(packet)
                     while self._bytes > max_bytes and self._buffer:
@@ -250,17 +257,28 @@ class PreCaptureManager:
             if not ok:
                 self._reason = reason
                 return []
+            # NEW-C3 fix: сохраняем FD в локальную переменную внутри lock,
+            # чтобы параллельный stop() не мог сделать его невалидным
+            local_fd = self._sock_fd
+            local_snaplen = self._snaplen
+        if local_fd is None:
+            return []
         deadline = time.monotonic() + duration
         packets: list[tuple[float, bytes]] = []
         try:
             while time.monotonic() < deadline:
-                if self._sock_fd is None:
-                    break
                 timeout = max(0.0, min(0.2, deadline - time.monotonic()))
-                ready, _, _ = select.select([self._sock_fd], [], [], timeout)
+                try:
+                    ready, _, _ = select.select([local_fd], [], [], timeout)
+                except (OSError, ValueError):
+                    # FD закрыт параллельным stop() — прекращаем захват
+                    break
                 if not ready:
                     continue
-                packet = os.read(self._sock_fd, self._snaplen)
+                try:
+                    packet = os.read(local_fd, local_snaplen)
+                except OSError:
+                    break
                 if not packet or not self._packet_allowed(packet):
                     continue
                 packets.append((time.time(), packet))
@@ -317,8 +335,9 @@ class PreCaptureManager:
         target = Path(output_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("wb") as fh:
-            # Глобальный заголовок PCAP (little-endian)
-            fh.write(struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, self._snaplen, 1))
+            # NEW-L3 fix: PCAP magic number как именованная константа
+            PCAP_MAGIC = 0xA1B2C3D4  # noqa: N806
+            fh.write(struct.pack("<IHHIIII", PCAP_MAGIC, 2, 4, 0, 0, self._snaplen, 1))
             for ts, packet in packets:
                 ts_sec = int(ts)
                 ts_usec = int((ts - ts_sec) * 1_000_000)

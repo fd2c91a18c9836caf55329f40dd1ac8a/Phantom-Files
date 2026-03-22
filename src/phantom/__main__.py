@@ -67,7 +67,12 @@ async def _start_asgi_server(
     from phantom.api.auth import get_jwt_provider
 
     jwt_provider = get_jwt_provider()
-    rate_limit = int(api_cfg.get("rate_limit_per_minute", 60))
+    try:
+        rate_limit = int(api_cfg.get("rate_limit_per_minute", 60))
+    except (TypeError, ValueError):
+        rate_limit = 60
+    mtls_token_env = str(api_cfg.get("mtls_proxy_token_env", "PHANTOM_MTLS_PROXY_TOKEN"))
+    mtls_proxy_token = os.getenv(mtls_token_env, "").strip()
 
     app = create_asgi_app(
         health_provider=lambda: {
@@ -83,6 +88,7 @@ async def _start_asgi_server(
         api_key=os.getenv(str(api_cfg.get("api_key_env", "PHANTOM_API_KEY"))),
         api_keys=api_role_keys,
         jwt_provider=jwt_provider,
+        mtls_proxy_token=mtls_proxy_token,
         rate_limit_per_minute=rate_limit,
     )
 
@@ -101,7 +107,15 @@ async def _start_asgi_server(
     server = uvicorn.Server(config)
     # Запускаем uvicorn в фоновой задаче
     asyncio.create_task(server.serve())
-    logger.info("ASGI server started on %s:%s (TLS=%s)", bind, port, bool(ssl_certfile))
+    # R3-H2 fix: дождаться фактического bind перед логированием
+    for _ in range(40):  # до 2 секунд
+        await asyncio.sleep(0.05)
+        if server.started:
+            break
+    if server.started:
+        logger.info("ASGI server started on %s:%s (TLS=%s)", bind, port, bool(ssl_certfile))
+    else:
+        logger.warning("ASGI server may not have started on %s:%s", bind, port)
     return server
 
 
@@ -125,19 +139,28 @@ def _load_api_role_keys(api_cfg: dict[str, object]) -> dict[str, str]:
 
 
 def _api_cfg_fingerprint(api_cfg: dict[str, object], api_role_keys: dict[str, str]) -> str:
-    """Хэш конфигурации API (включая секреты из ENV) для hot-reload."""
+    """Хэш конфигурации API (включая секреты из ENV) для hot-reload.
+
+    NEW-C1 fix: секреты хэшируются по отдельности, чтобы не хранить их
+    в единой JSON-строке в памяти.
+    """
     api_key_env = str(api_cfg.get("api_key_env", "PHANTOM_API_KEY"))
-    payload = {
-        "security_mode": str(api_cfg.get("security_mode", "api_key")),
-        "api_key": os.getenv(api_key_env, ""),
-        "api_keys": api_role_keys,
-        "jwt_secret": os.getenv("PHANTOM_JWT_SECRET", ""),
-        "tls_cert": api_cfg.get("tls_cert"),
-        "tls_key": api_cfg.get("tls_key"),
-        "rate_limit_per_minute": int(api_cfg.get("rate_limit_per_minute", 60)),
-    }
-    packed = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
-    return hashlib.sha256(packed).hexdigest()
+    mtls_token_env = str(api_cfg.get("mtls_proxy_token_env", "PHANTOM_MTLS_PROXY_TOKEN"))
+
+    def _h(s: str) -> str:
+        return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+    parts = [
+        str(api_cfg.get("security_mode", "api_key")),
+        _h(os.getenv(api_key_env, "")),
+        _h(json.dumps(dict(sorted(api_role_keys.items())), ensure_ascii=False)),
+        _h(os.getenv("PHANTOM_JWT_SECRET", "")),
+        _h(os.getenv(mtls_token_env, "")),
+        str(api_cfg.get("tls_cert", "")),
+        str(api_cfg.get("tls_key", "")),
+        str(api_cfg.get("rate_limit_per_minute", 60)),
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
 async def _async_main() -> int:
@@ -187,10 +210,19 @@ async def _async_main() -> int:
     precapture = get_precapture_manager(raw_cfg)
     precapture.start()
 
-    # Ротация ловушек по таймеру
+    # R3-C2 fix: после ротации ловушек обновляем eBPF inode map
+    def _rotation_callback(msg: str) -> None:
+        logger.info("Rotation: %s", msg)
+        if msg.startswith("rotated:"):
+            try:
+                sensor_manager.reload_traps()
+                logger.info("eBPF inode map reloaded after rotation")
+            except Exception as exc:
+                logger.error("Failed to reload traps after rotation: %s", exc)
+
     rotator = TrapRotator(
         trap_registry=trap_registry,
-        deploy_callback=lambda msg: logger.info("Rotation: %s", msg),
+        deploy_callback=_rotation_callback,
         config=dict(raw_cfg.get("rotation", {})),
     )
     rotator.start(loop=asyncio.get_running_loop())
@@ -200,7 +232,10 @@ async def _async_main() -> int:
     api_role_keys = _load_api_role_keys(api_cfg)
     api_cfg_fingerprint = _api_cfg_fingerprint(api_cfg, api_role_keys)
     api_bind = str(api_cfg.get("bind", "127.0.0.1"))
-    api_port = int(api_cfg.get("port", 8787))
+    try:
+        api_port = int(api_cfg.get("port", 8787))
+    except (TypeError, ValueError):
+        api_port = 8787
 
     stop_event = asyncio.Event()
     reload_event = asyncio.Event()
@@ -264,6 +299,7 @@ async def _async_main() -> int:
                     precapture.reload(dict(re_cfg))
 
                     # 4. Запускаем новые сенсоры
+                    # R3-H1 fix: rollback при ошибке — возобновляем старые сенсоры
                     new_sensor_manager = SensorManager(
                         dict(re_cfg),
                         callback=orchestrator.handle_event,
@@ -271,8 +307,22 @@ async def _async_main() -> int:
                         trap_registry=trap_registry,
                         loop=asyncio.get_running_loop(),
                     )
-                    new_sensor_manager.start()
-                    # 5. Останавливаем старые сенсоры
+                    try:
+                        new_sensor_manager.start()
+                    except Exception as sensor_exc:
+                        logger.error(
+                            "New sensor start failed, rolling back: %s", sensor_exc
+                        )
+                        # Rollback: возобновляем старые сенсоры
+                        try:
+                            sensor_manager.start()
+                        except Exception as rollback_exc:
+                            logger.critical(
+                                "Rollback failed — system blind: %s", rollback_exc
+                            )
+                        raise
+
+                    # 5. Останавливаем старые сенсоры (только если новые стартовали)
                     old_sensor_manager = sensor_manager
                     sensor_manager = new_sensor_manager
                     old_sensor_manager.stop()
@@ -286,7 +336,7 @@ async def _async_main() -> int:
                     rotator.stop()
                     rotator = TrapRotator(
                         trap_registry=trap_registry,
-                        deploy_callback=lambda msg: logger.info("Rotation: %s", msg),
+                        deploy_callback=_rotation_callback,
                         config=dict(re_cfg.get("rotation", {})),
                     )
                     rotator.start(loop=asyncio.get_running_loop())
@@ -308,8 +358,14 @@ async def _async_main() -> int:
                         or re_port != api_port
                         or re_api_fingerprint != api_cfg_fingerprint
                     ):
+                        # R3-H2 fix: дождаться остановки старого сервера перед запуском нового
                         if api_server is not None:
                             api_server.should_exit = True
+                            # Даём uvicorn время на graceful shutdown и освобождение порта
+                            for _ in range(20):
+                                await asyncio.sleep(0.25)
+                                if not api_server.started:
+                                    break
                         api_server = await _start_asgi_server(
                             re_bind, re_port, re_api_cfg, re_api_keys,
                             sensor_manager, precapture, orchestrator, control,

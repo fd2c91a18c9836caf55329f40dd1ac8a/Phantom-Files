@@ -4,10 +4,14 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
+import shutil
 import time
+from pathlib import Path
 from typing import Awaitable, Callable, Dict
 
+from phantom.core.config import get_config
 from phantom.core.state import Decision, ResponseAction, ResponseResult, RunMode
 from phantom.logging.audit import AuditLogger
 from phantom.response.enforcement import NetworkEnforcer, ProcessEnforcer
@@ -54,6 +58,16 @@ class Dispatcher:
         act_timeout = max(1.0, act_timeout)
         kill_executed = False
         for action in decision.actions:
+            # NEW-H4 fix: defense-in-depth — проверяем mode ДО вызова handler
+            if self._action_blocked_by_mode(action, decision.mode):
+                result = ResponseResult(
+                    decision_id=decision.decision_id,
+                    action=action,
+                    success=True,
+                    message="blocked_by_mode",
+                )
+                self._audit.log(decision=decision, result=result)
+                continue
             handler = self._handlers.get(action)
             if not handler:
                 logger.warning("No handler for action %s", action.value)
@@ -70,26 +84,20 @@ class Dispatcher:
                     self._audit.log(decision=decision, result=force_result)
                 break
 
+    # NEW-H5 fix: набор действий, блокируемых в неактивных режимах
+    _BLOCKED_IN_PASSIVE = frozenset({
+        ResponseAction.ISOLATE_PROCESS,
+        ResponseAction.BLOCK_NETWORK,
+        ResponseAction.BLOCK_IP,
+        ResponseAction.KILL_PROCESS,
+        ResponseAction.QUARANTINE_FILE,
+        ResponseAction.SCAN_PERSISTENCE,
+        ResponseAction.KILL_USER_SESSIONS,
+    })
+
     def _action_blocked_by_mode(self, action: ResponseAction, mode: RunMode) -> bool:
-        if mode == RunMode.DRY_RUN and action in {
-            ResponseAction.ISOLATE_PROCESS,
-            ResponseAction.BLOCK_NETWORK,
-            ResponseAction.BLOCK_IP,
-            ResponseAction.KILL_PROCESS,
-            ResponseAction.QUARANTINE_FILE,
-            ResponseAction.SCAN_PERSISTENCE,
-            ResponseAction.KILL_USER_SESSIONS,
-        }:
-            return True
-        if mode == RunMode.OBSERVATION and action in {
-            ResponseAction.ISOLATE_PROCESS,
-            ResponseAction.BLOCK_NETWORK,
-            ResponseAction.BLOCK_IP,
-            ResponseAction.KILL_PROCESS,
-            ResponseAction.QUARANTINE_FILE,
-            ResponseAction.SCAN_PERSISTENCE,
-            ResponseAction.KILL_USER_SESSIONS,
-        }:
+        # NEW-H5 fix: объединены DRY_RUN и OBSERVATION в один блок
+        if mode in {RunMode.DRY_RUN, RunMode.OBSERVATION} and action in self._BLOCKED_IN_PASSIVE:
             return True
         return False
 
@@ -278,9 +286,6 @@ class Dispatcher:
                 message="no_target_path",
             )
 
-        import shutil
-        from pathlib import Path
-
         src = Path(target_path)
         if not src.exists():
             return ResponseResult(
@@ -289,9 +294,21 @@ class Dispatcher:
                 success=False,
                 message="file_not_found",
             )
+        # NEW-M5 fix: не перемещать симлинки — атакующий может подменить цель
+        if src.is_symlink():
+            return ResponseResult(
+                decision_id=decision.decision_id,
+                action=ResponseAction.QUARANTINE_FILE,
+                success=False,
+                message="refusing_symlink",
+            )
 
         try:
-            quarantine_dir = Path("/var/lib/phantom/quarantine")
+            # NEW-H3 fix: quarantine_dir из конфига
+            cfg = get_config()
+            paths = cfg.get("paths", {})
+            quarantine_path = str(paths.get("quarantine_dir", "/var/lib/phantom/quarantine"))
+            quarantine_dir = Path(quarantine_path)
             quarantine_dir.mkdir(parents=True, exist_ok=True)
             dst = quarantine_dir / f"{src.name}.{decision.decision_id[:8]}"
             shutil.move(str(src), str(dst))
@@ -399,5 +416,11 @@ class Dispatcher:
             return ips
         for conn in network.connections:
             if conn.remote_addr and conn.remote_addr not in {"127.0.0.1", "::1", "0.0.0.0"}:
+                # NEW-H8 fix: валидация IP через ipaddress
+                try:
+                    ipaddress.ip_address(conn.remote_addr)
+                except ValueError:
+                    logger.warning("Invalid IP address skipped: %s", conn.remote_addr)
+                    continue
                 ips.append(conn.remote_addr)
         return list(dict.fromkeys(ips))

@@ -255,6 +255,57 @@ def test_jwt_auth_flow():
     assert resp.status_code == 200
 
 
+def test_mtls_mode_rejects_verified_header_without_proxy_token():
+    app = _app(security_mode="mtls", api_key=None, api_keys=None)
+    with TestClient(app, client=("127.0.0.1", 33001)) as client:
+        resp = client.get(
+            "/api/v1/incidents",
+            headers={
+                "x-client-cert-verified": "SUCCESS",
+                "x-client-cert-subject": "CN=trusted-client",
+            },
+        )
+    assert resp.status_code == 401
+
+
+def test_mtls_mode_accepts_only_with_loopback_verified_subject_and_proxy_token():
+    app = _app(
+        security_mode="mtls",
+        api_key=None,
+        api_keys=None,
+        mtls_proxy_token="proxy-shared-secret",
+    )
+    with TestClient(app, client=("127.0.0.1", 33002)) as client:
+        resp = client.get(
+            "/api/v1/incidents",
+            headers={
+                "x-client-cert-verified": "SUCCESS",
+                "x-client-cert-subject": "CN=trusted-client",
+                "x-phantom-mtls-token": "proxy-shared-secret",
+            },
+        )
+    assert resp.status_code == 200
+
+
+def test_mtls_mode_rejects_non_loopback_even_with_token():
+    app = _app(
+        security_mode="mtls",
+        api_key=None,
+        api_keys=None,
+        mtls_proxy_token="proxy-shared-secret",
+    )
+    with TestClient(app, client=("10.0.0.2", 33003)) as client:
+        resp = client.get(
+            "/api/v1/incidents",
+            headers={
+                "x-client-cert-verified": "SUCCESS",
+                "x-client-cert-subject": "CN=trusted-client",
+                "x-phantom-mtls-token": "proxy-shared-secret",
+            },
+        )
+    assert resp.status_code == 401
+
+
 # ---------- Incident by ID ----------
 
 def test_get_incident_not_found():

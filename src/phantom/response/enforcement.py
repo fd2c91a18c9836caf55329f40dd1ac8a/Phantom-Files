@@ -21,6 +21,24 @@ from phantom.core.config import get_config
 logger = logging.getLogger("phantom.enforcement")
 
 
+def _pid_starttime(pid: int) -> Optional[int]:
+    """Читает start_time процесса из /proc/<pid>/stat (поле 22, индекс 19 после comm)."""
+    try:
+        text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+    if ")" not in text:
+        return None
+    rest = text.split(")", 1)[1].strip()
+    parts = rest.split()
+    if len(parts) < 20:
+        return None
+    val = parts[19]
+    if not val.isdigit():
+        return None
+    return int(val)
+
+
 @dataclass(frozen=True)
 class CommandResult:
     ok: bool
@@ -30,20 +48,38 @@ class CommandResult:
 
 
 class ProcessEnforcer:
-    async def sigstop(self, pid: int) -> bool:
-        return await asyncio.to_thread(self._send_signal, pid, signal.SIGSTOP)
+    async def sigstop(self, pid: int, *, expected_start_time: Optional[int] = None) -> bool:
+        return await asyncio.to_thread(self._send_signal, pid, signal.SIGSTOP, expected_start_time)
 
-    async def sigkill(self, pid: int) -> bool:
-        return await asyncio.to_thread(self._send_signal, pid, signal.SIGKILL)
+    async def sigkill(self, pid: int, *, expected_start_time: Optional[int] = None) -> bool:
+        return await asyncio.to_thread(self._send_signal, pid, signal.SIGKILL, expected_start_time)
 
-    async def sigcont(self, pid: int) -> bool:
-        return await asyncio.to_thread(self._send_signal, pid, signal.SIGCONT)
+    async def sigcont(self, pid: int, *, expected_start_time: Optional[int] = None) -> bool:
+        return await asyncio.to_thread(self._send_signal, pid, signal.SIGCONT, expected_start_time)
 
-    def _send_signal(self, pid: int, sig: signal.Signals) -> bool:
+    def _send_signal(
+        self, pid: int, sig: signal.Signals, expected_start_time: Optional[int] = None
+    ) -> bool:
         # Защита: не трогаем init (PID 1) и невалидные PID
         if pid <= 1:
             logger.warning("Refused: attempt to send %s to PID=%s", sig.name, pid)
             return False
+        # Защита от PID reuse: проверяем start_time процесса перед отправкой сигнала.
+        # Если start_time изменился — PID был переназначен другому процессу.
+        if expected_start_time is not None:
+            current_start = _pid_starttime(pid)
+            if current_start is None:
+                logger.warning(
+                    "PID %s vanished before signal %s (cannot read start_time)", pid, sig.name
+                )
+                return False
+            if current_start != expected_start_time:
+                logger.warning(
+                    "PID reuse detected for PID %s: expected start_time=%s, got %s. "
+                    "Signal %s NOT sent (wrong process).",
+                    pid, expected_start_time, current_start, sig.name,
+                )
+                return False
         try:
             os.kill(pid, sig)
             return True
@@ -219,21 +255,7 @@ class CgroupEbpfIsolator:
         return self._cgroup_root / rel.lstrip("/")
 
     def _pid_starttime(self, pid: int) -> Optional[int]:
-        try:
-            text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return None
-        if ")" not in text:
-            return None
-        # Формат: pid (comm) state ...; берём поля после ')'
-        rest = text.split(")", 1)[1].strip()
-        parts = rest.split()
-        if len(parts) < 20:
-            return None
-        val = parts[19]
-        if not val.isdigit():
-            return None
-        return int(val)
+        return _pid_starttime(pid)
 
     def _parse_unified_cgroup(self, text: str) -> Optional[str]:
         for line in text.splitlines():
@@ -456,15 +478,23 @@ class NetworkEnforcer:
         self._ensure_base()
         failures = 0
         for ip in ips:
-            set_name = self._ip_set_name(ip)
+            # Валидация и нормализация IP — защита от injection в nftables элементы
+            try:
+                normalized_ip = str(ipaddress.ip_address(ip))
+            except ValueError:
+                failures += 1
+                logger.error("Invalid IP address for blacklist: %s", ip)
+                continue
+            set_name = self._ip_set_name(normalized_ip)
             if not set_name:
                 failures += 1
-                logger.error("Unsupported IP for blacklist: %s", ip)
+                logger.error("Unsupported IP for blacklist: %s", normalized_ip)
                 continue
-            if ttl_seconds and ttl_seconds > 0:
-                element = f"{ip} timeout {ttl_seconds}s"
+            # TTL должен быть положительным целым числом
+            if ttl_seconds and isinstance(ttl_seconds, int) and ttl_seconds > 0:
+                element = f"{normalized_ip} timeout {int(ttl_seconds)}s"
             else:
-                element = ip
+                element = normalized_ip
             res = self._run_nft(
                 ["add", "element", self.family, self.table, set_name, "{ " + element + " }"],
                 tolerate_errors=False,
@@ -488,10 +518,11 @@ class NetworkEnforcer:
             logger.error("Unable to resolve UID for PID %s", pid)
             return False
         self._ensure_base()
-        if ttl_seconds and ttl_seconds > 0:
-            element = f"{uid} timeout {ttl_seconds}s"
+        # UID — целое число, TTL — целое число: явное приведение для защиты от injection
+        if ttl_seconds and isinstance(ttl_seconds, int) and ttl_seconds > 0:
+            element = f"{int(uid)} timeout {int(ttl_seconds)}s"
         else:
-            element = str(uid)
+            element = str(int(uid))
         res = self._run_nft(
             ["add", "element", self.family, self.table, self.uid_set, "{ " + element + " }"],
             tolerate_errors=False,

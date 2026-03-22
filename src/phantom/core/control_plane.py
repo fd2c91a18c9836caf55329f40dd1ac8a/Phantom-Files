@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import uuid
 from dataclasses import dataclass
@@ -145,7 +146,7 @@ class ControlPlane:
         output.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return output
 
-    def create_block(self, payload: dict[str, Any], role: str) -> dict[str, Any]:
+    async def create_block(self, payload: dict[str, Any], role: str) -> dict[str, Any]:
         kind = str(payload.get("kind", "ip")).strip().lower()
         raw_targets = payload.get("targets", [])
         if isinstance(raw_targets, str):
@@ -165,10 +166,12 @@ class ControlPlane:
             if ttl_seconds < 0:
                 raise ValueError("ttl_seconds must be >= 0")
 
+        # R3-C1 fix: вызываем async-методы напрямую вместо
+        # run_coroutine_threadsafe + future.result() (deadlock на том же event loop)
         if kind == "ip":
-            ok = self._submit_network_block(targets, ttl_seconds)
+            ok = await self._submit_network_block(targets, ttl_seconds)
         else:
-            ok = self._submit_process_block(targets, ttl_seconds)
+            ok = await self._submit_process_block(targets, ttl_seconds)
         status = "active" if ok else "failed"
 
         now = _utc_now()
@@ -279,8 +282,24 @@ class ControlPlane:
         else:
             updated = dict(current)
             updated.update(payload)
+        # R3-M3a fix: atomic write через temp + os.replace()
         self._policies_path.parent.mkdir(parents=True, exist_ok=True)
-        self._policies_path.write_text(yaml.safe_dump(updated, sort_keys=True), encoding="utf-8")
+        import tempfile as _tempfile
+        fd, tmp_path = _tempfile.mkstemp(
+            dir=str(self._policies_path.parent), suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(yaml.safe_dump(updated, sort_keys=True))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self._policies_path)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
         self._last_policy_change = now
         self._audit.log(extra={
             "api_action": "update_policies",
@@ -291,17 +310,19 @@ class ControlPlane:
         logger.warning("Policies changed by user role=%s replace=%s", role, replace)
         return updated
 
-    def _submit_network_block(self, ips: list[str], ttl_seconds: Optional[int]) -> bool:
+    async def _submit_network_block(self, ips: list[str], ttl_seconds: Optional[int]) -> bool:
+        # R3-C1 fix: async вместо run_coroutine_threadsafe (deadlock)
         try:
-            future = asyncio.run_coroutine_threadsafe(
+            result = await asyncio.wait_for(
                 self._network.block_ips(ips, ttl_seconds=ttl_seconds),
-                self._loop,
+                timeout=10,
             )
-            return bool(future.result(timeout=10))
+            return bool(result)
         except Exception:
             return False
 
-    def _submit_process_block(self, targets: list[str], ttl_seconds: Optional[int]) -> bool:
+    async def _submit_process_block(self, targets: list[str], ttl_seconds: Optional[int]) -> bool:
+        # R3-C1 fix: async вместо run_coroutine_threadsafe (deadlock)
         ok = True
         for target in targets:
             if not target.isdigit():
@@ -309,14 +330,15 @@ class ControlPlane:
                 continue
             pid = int(target)
             try:
-                stop_future = asyncio.run_coroutine_threadsafe(self._process.sigstop(pid), self._loop)
-                isolated_future = asyncio.run_coroutine_threadsafe(
-                    self._network.isolate_process(pid, ttl_seconds=ttl_seconds),
-                    self._loop,
+                stop_ok, isolated_ok = await asyncio.gather(
+                    asyncio.wait_for(self._process.sigstop(pid), timeout=5),
+                    asyncio.wait_for(
+                        self._network.isolate_process(pid, ttl_seconds=ttl_seconds),
+                        timeout=10,
+                    ),
+                    return_exceptions=False,
                 )
-                stop_ok = bool(stop_future.result(timeout=5))
-                isolated_ok = bool(isolated_future.result(timeout=10))
-                ok = ok and stop_ok and isolated_ok
+                ok = ok and bool(stop_ok) and bool(isolated_ok)
             except Exception:
                 ok = False
         return ok

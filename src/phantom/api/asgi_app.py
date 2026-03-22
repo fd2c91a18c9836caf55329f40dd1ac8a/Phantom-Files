@@ -202,6 +202,7 @@ def create_asgi_app(
     api_key: str | None = None,
     api_keys: dict[str, str] | None = None,
     jwt_provider: JWTProvider | None = None,
+    mtls_proxy_token: str | None = None,
     rate_limit_per_minute: int = 60,
 ) -> Starlette:
     """
@@ -214,12 +215,15 @@ def create_asgi_app(
     - api_key: основной API-ключ (одиночный режим)
     - api_keys: словарь {token: role} для multi-key auth
     - jwt_provider: провайдер JWT-токенов
+    - mtls_proxy_token: общий секрет между reverse-proxy и API
+      для подтверждения mTLS-валидации на proxy уровне
     - rate_limit_per_minute: лимит запросов в минуту на IP
     """
     _api_key = api_key
     _api_keys = dict(api_keys or {})
     _jwt = jwt_provider
     _security_mode = security_mode
+    _mtls_proxy_token = (mtls_proxy_token or "").strip()
     _health = health_provider
     _control = control
 
@@ -286,7 +290,7 @@ def create_asgi_app(
         return None
 
     def _mtls_verified(request: Request) -> bool:
-        """Проверка mTLS — заголовок принимается только от loopback (reverse proxy)."""
+        """Проверка mTLS от reverse-proxy (loopback + verified + shared secret)."""
         client_ip = request.client.host if request.client else ""
         if client_ip not in {"127.0.0.1", "::1", "localhost"}:
             logger.warning(
@@ -295,7 +299,25 @@ def create_asgi_app(
             )
             return False
         value = request.headers.get("x-client-cert-verified", "").strip().lower()
-        return value in {"1", "true", "yes", "success", "verified"}
+        if value not in {"1", "true", "yes", "success", "verified"}:
+            return False
+        subject = request.headers.get("x-client-cert-subject", "").strip()
+        if not subject:
+            subject = request.headers.get("x-ssl-client-s-dn", "").strip()
+        if not subject:
+            logger.warning("mTLS verified header present but client cert subject is missing")
+            return False
+        if not _mtls_proxy_token:
+            logger.error("mTLS mode is enabled, but mtls_proxy_token is not configured")
+            return False
+        token = request.headers.get("x-phantom-mtls-token", "").strip()
+        if not token:
+            logger.warning("mTLS proxy token header is missing")
+            return False
+        if not hmac.compare_digest(token.encode(), _mtls_proxy_token.encode()):
+            logger.warning("mTLS proxy token mismatch")
+            return False
+        return True
 
     def _require_auth(request: Request, required_roles: set[str] | None = None) -> tuple[str | None, Response | None]:
         """Проверка авторизации. Возвращает (role, error_response)."""
@@ -364,6 +386,9 @@ def create_asgi_app(
             return JSONResponse({"error": "body_too_large"}, status_code=413)
         if err is not None:
             return JSONResponse({"error": "invalid_json"}, status_code=400)
+        # R3-H6 fix: проверка что payload — dict
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "expected_json_object"}, status_code=400)
         # Аутентификация через API-ключ для получения JWT
         role = _resolve_api_key(request)
         if role is None:
@@ -381,6 +406,9 @@ def create_asgi_app(
             return JSONResponse({"error": "body_too_large"}, status_code=413)
         if err is not None:
             return JSONResponse({"error": "invalid_json"}, status_code=400)
+        # R3-H6 fix: проверка что payload — dict
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "expected_json_object"}, status_code=400)
         refresh_token = str(payload.get("refresh_token", "")).strip()
         if not refresh_token:
             return JSONResponse({"error": "refresh_token_required"}, status_code=400)
@@ -430,7 +458,7 @@ def create_asgi_app(
             return JSONResponse({"error": "invalid_json"}, status_code=400)
         if _control is not None:
             try:
-                result = _control.create_block(payload, role=role)
+                result = await _control.create_block(payload, role=role)
                 return JSONResponse(result, status_code=201)
             except PermissionError as exc:
                 return JSONResponse({"error": "forbidden", "detail": str(exc)}, status_code=403)
@@ -482,8 +510,10 @@ def create_asgi_app(
             return JSONResponse({"error": "body_too_large"}, status_code=413)
         if parse_err is not None:
             return JSONResponse({"error": "invalid_json"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "expected_json_object"}, status_code=400)
         # Запрет изменения mode через API
-        if isinstance(payload, dict) and "mode" in payload:
+        if "mode" in payload:
             return JSONResponse(
                 {"error": "mode_change_forbidden",
                  "detail": "Mode change is only allowed via CLI with root privileges"},

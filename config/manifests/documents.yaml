@@ -1,4 +1,3 @@
-# Манифест ловушек: документы (бинарные ловушки)
 traps:
   - id: trap-doc-finance-01
     template: binary/payroll_template.docx

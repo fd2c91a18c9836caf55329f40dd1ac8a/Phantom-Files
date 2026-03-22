@@ -9,6 +9,7 @@ import copy
 import logging
 import os
 import random
+import secrets
 import shutil
 import uuid
 import zipfile
@@ -27,6 +28,8 @@ logger = logging.getLogger("phantom.factory.generator")
 class ContentGenerator:
     def __init__(self, stomp_config: Optional[Dict[str, Any]] = None):
         self.fake = Faker()
+        # M9 fix: seed от CSPRNG для непредсказуемости генерируемого контента
+        self.fake.seed_instance(secrets.randbits(64))
         self.stomp_config = stomp_config
         self._jinja = SandboxedEnvironment(
             autoescape=False,

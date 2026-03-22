@@ -14,10 +14,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import random
+import secrets
 import shutil
 import stat
-import string
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -190,7 +189,9 @@ class SandboxRunner:
                 read_only=True,
                 mem_limit=mem_limit,
                 pids_limit=pids_limit,
+                privileged=False,  # H7 fix: явно запрещаем privileged режим
                 cap_drop=["ALL"],
+                security_opt=["no-new-privileges"],  # H7 fix: запрет эскалации привилегий
                 tmpfs={"/tmp": "size=64m"},
                 volumes=volumes or None,
                 labels={
@@ -265,6 +266,11 @@ class SandboxRunner:
                 except Exception:
                     pass
 
+    # R3-H4 fix: лимиты для защиты от tarbomb/OOM
+    _MAX_TAR_BYTES = 256 * 1024 * 1024   # 256 MiB макс. размер архива
+    _MAX_EXTRACT_FILES = 10_000           # макс. файлов при распаковке
+    _MAX_EXTRACT_BYTES = 512 * 1024 * 1024  # 512 MiB суммарный размер
+
     async def _export_artifacts(self, container: Any, run_dir: Path) -> list[str]:
         """Экспорт файлов из контейнера."""
         artifacts: list[str] = []
@@ -272,7 +278,16 @@ class SandboxRunner:
         try:
             import tarfile
             bits, _ = await asyncio.to_thread(container.get_archive, "/tmp/output")
-            tar_bytes = b"".join(bits)
+            # R3-H4 fix: streaming сбор с лимитом размера
+            collected: list[bytes] = []
+            total = 0
+            for chunk in bits:
+                total += len(chunk)
+                if total > self._MAX_TAR_BYTES:
+                    logger.warning("Sandbox tar exceeds %d bytes limit, truncating", self._MAX_TAR_BYTES)
+                    break
+                collected.append(chunk)
+            tar_bytes = b"".join(collected)
             tar_path = run_dir / "output.tar"
             tar_path.write_bytes(tar_bytes)
             # Распаковываем
@@ -292,8 +307,13 @@ class SandboxRunner:
             return False
 
     def _safe_extract_tar(self, tf, target_dir: Path) -> None:
-        """Безопасная распаковка tar без symlink/hardlink и path traversal."""
+        """Безопасная распаковка tar без symlink/hardlink и path traversal.
+
+        R3-H4 fix: лимиты на число файлов и суммарный размер.
+        """
         target_dir.mkdir(parents=True, exist_ok=True)
+        file_count = 0
+        total_bytes = 0
         for member in tf.getmembers():
             if member.isdev() or member.issym() or member.islnk():
                 continue
@@ -303,6 +323,14 @@ class SandboxRunner:
             if member.isdir():
                 member_path.mkdir(parents=True, exist_ok=True)
                 continue
+            file_count += 1
+            if file_count > self._MAX_EXTRACT_FILES:
+                logger.warning("Sandbox tar: too many files (>%d), stopping", self._MAX_EXTRACT_FILES)
+                break
+            total_bytes += max(0, member.size)
+            if total_bytes > self._MAX_EXTRACT_BYTES:
+                logger.warning("Sandbox tar: total size exceeds %d bytes, stopping", self._MAX_EXTRACT_BYTES)
+                break
             parent = member_path.parent
             parent.mkdir(parents=True, exist_ok=True)
             src = tf.extractfile(member)
@@ -339,5 +367,5 @@ class SandboxRunner:
 
     @staticmethod
     def _random_suffix(length: int = 8) -> str:
-        alphabet = string.ascii_lowercase + string.digits
-        return "".join(random.choice(alphabet) for _ in range(length))
+        # L1 fix: использовать CSPRNG вместо random для имён контейнеров
+        return secrets.token_hex(length // 2 + 1)[:length]

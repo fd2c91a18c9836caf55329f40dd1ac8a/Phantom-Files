@@ -27,11 +27,12 @@ logger = logging.getLogger("phantom.factory.templates")
 
 SEMVER_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-# Запрещённые конструкции в текстовых шаблонах (Jinja2 sandbox ловит не всё)
 _FORBIDDEN_PATTERNS = re.compile(
     r"os\.system|subprocess|__import__|eval\s*\(|exec\s*\(|"
     r"importlib|__builtins__|__class__|__subclasses__|"
-    r"popen|commands\.get|pty\.spawn",
+    r"__mro__|__globals__|__init__|__getattr__|"  # H8 fix: блокировка MRO/globals bypass
+    r"popen|commands\.get|pty\.spawn|"
+    r"getattr\s*\(",  # H8 fix: блокировка getattr() bypass
     re.IGNORECASE,
 )
 TEXT_EXTENSIONS = frozenset({".j2", ".txt", ".env", ".sql", ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg", ".conf", ".sh", ".py"})
@@ -203,11 +204,11 @@ class TemplateStore:
             if active_link.is_symlink():
                 try:
                     target_name = os.readlink(str(active_link))
-                    if any(Path(target_name).stem == version for _ in [1]):
+                    if Path(target_name).stem == version:
                         active_link.unlink()
                         logger.info("Active symlink removed (deleted version was active)")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to check active symlink: %s", exc)
             # Если не осталось версий — удаляем каталог
             remaining = self._version_files(template_dir)
             if not remaining:
@@ -231,7 +232,10 @@ class TemplateStore:
         suffix = src.suffix.lower()
 
         if suffix in TEXT_EXTENSIONS:
-            text = src.read_text(encoding="utf-8")
+            try:
+                text = src.read_text(encoding="utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"Template file is not valid UTF-8: {exc}") from exc
             # Проверка на запрещённые конструкции
             match = _FORBIDDEN_PATTERNS.search(text)
             if match:
@@ -244,13 +248,18 @@ class TemplateStore:
         if suffix in BINARY_EXTENSIONS:
             scanner = which("clamscan")
             if scanner:
-                proc = subprocess.run(
-                    [scanner, "--no-summary", str(src)],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
+                # M8 fix: явный cleanup процесса при таймауте
+                try:
+                    proc = subprocess.run(
+                        [scanner, "--no-summary", str(src)],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    logger.warning("clamscan timeout for %s, process killed", src)
+                    raise ValueError(f"Antivirus check timed out for {src}") from exc
                 if proc.returncode != 0:
                     raise ValueError(f"Antivirus check failed: {proc.stdout or proc.stderr}")
             return
@@ -283,6 +292,9 @@ class TemplateStore:
 
     def activate_template(self, name: str, version: str) -> str:
         """Активация конкретной версии шаблона (создаёт symlink 'active')."""
+        # R3-H5 fix: валидация name (как в add/remove/get)
+        if not NAME_RE.match(name):
+            raise ValueError("Unsafe template name")
         if not SEMVER_RE.match(version):
             raise ValueError("Version must follow vMAJOR.MINOR.PATCH")
         template_dir = self.root / name

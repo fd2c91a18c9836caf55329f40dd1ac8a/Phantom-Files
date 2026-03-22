@@ -7,12 +7,14 @@ JWT-аутентификация (self-issued HMAC-SHA256).
 
 from __future__ import annotations
 
+import json
 import hashlib
 import logging
 import os
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional
 
 import jwt  # PyJWT
@@ -58,6 +60,7 @@ class JWTProvider:
         secret: str | None = None,
         access_ttl: int = _ACCESS_TTL_SECONDS,
         refresh_ttl: int = _REFRESH_TTL_SECONDS,
+        revoked_store_path: str | None = None,
     ) -> None:
         self._secret = secret or os.getenv("PHANTOM_JWT_SECRET", "").strip()
         if not self._secret:
@@ -71,10 +74,18 @@ class JWTProvider:
             )
         self._access_ttl = max(60, access_ttl)
         self._refresh_ttl = max(300, refresh_ttl)
-        # Отозванные jti с временем отзыва (in-memory; при перезапуске сбрасывается)
+        # Отозванные jti с временем отзыва (пишутся на диск при доступности store).
         self._revoked_jti: dict[str, float] = {}
         self._max_revoked = 10000
         self._revoked_lock = threading.Lock()
+        store_raw = revoked_store_path or os.getenv("PHANTOM_JWT_REVOKED_STORE", "/var/lib/phantom/jwt_revoked.json")
+        self._revoked_store_path = Path(store_raw).expanduser()
+        self._revocation_persistent = False
+        self._revocation_persistent = self._init_revoked_store()
+        if self._revocation_persistent:
+            with self._revoked_lock:
+                self._cleanup_revoked_locked()
+                self._persist_revoked_locked()
 
     def issue_access_token(self, subject: str, role: str) -> str:
         """Выпуск access-токена."""
@@ -151,12 +162,18 @@ class JWTProvider:
         # Отзываем использованный refresh-токен (rotation)
         with self._revoked_lock:
             self._revoked_jti[claims.jti] = time.time()
+            if len(self._revoked_jti) > self._max_revoked:
+                self._cleanup_revoked_locked()
+            self._persist_revoked_locked()
         return self.issue_token_pair(claims.sub, claims.role)
 
     def revoke(self, jti: str) -> None:
         """Отзыв токена по jti."""
         with self._revoked_lock:
             self._revoked_jti[jti] = time.time()
+            if len(self._revoked_jti) > self._max_revoked:
+                self._cleanup_revoked_locked()
+            self._persist_revoked_locked()
 
     def _cleanup_revoked_locked(self) -> None:
         """Очистка протухших JTI (старше максимального TTL)."""
@@ -165,12 +182,60 @@ class JWTProvider:
         expired = [jti for jti, ts in self._revoked_jti.items() if ts < cutoff]
         for jti in expired:
             del self._revoked_jti[jti]
+        if expired:
+            self._persist_revoked_locked()
+
+    def _init_revoked_store(self) -> bool:
+        """Подгружает revoked JTI из файла и подготавливает persistent store."""
+        try:
+            self._revoked_store_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            logger.warning(
+                "JWT revocation store is unavailable (%s): %s. Falling back to in-memory mode.",
+                self._revoked_store_path,
+                exc,
+            )
+            return False
+
+        if self._revoked_store_path.exists():
+            try:
+                raw = json.loads(self._revoked_store_path.read_text(encoding="utf-8"))
+                bucket = raw.get("revoked_jti", raw) if isinstance(raw, dict) else {}
+                if isinstance(bucket, dict):
+                    for jti, ts in bucket.items():
+                        try:
+                            self._revoked_jti[str(jti)] = float(ts)
+                        except (TypeError, ValueError):
+                            continue
+            except Exception as exc:
+                logger.warning("Failed to load JWT revocation store: %s", exc)
+
+        return True
+
+    def _persist_revoked_locked(self) -> None:
+        if not self._revocation_persistent:
+            return
+        payload = {
+            "revoked_jti": self._revoked_jti,
+            "updated_at": int(time.time()),
+        }
+        tmp_path = self._revoked_store_path.with_suffix(self._revoked_store_path.suffix + ".tmp")
+        try:
+            tmp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp_path, self._revoked_store_path)
+        except Exception as exc:
+            logger.warning("Failed to persist JWT revocation store: %s", exc)
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _issue(self, subject: str, role: str, token_type: str, ttl: int) -> str:
         now = int(time.time())
+        # M1 fix: используем полный hexdigest (64 символа) вместо усечённого до 24
         jti = hashlib.sha256(
             f"{subject}:{role}:{token_type}:{now}:{os.urandom(16).hex()}".encode()
-        ).hexdigest()[:24]
+        ).hexdigest()
         payload: dict[str, Any] = {
             "sub": subject,
             "role": role,
@@ -187,6 +252,7 @@ def get_jwt_provider(
     secret: str | None = None,
     access_ttl: int | None = None,
     refresh_ttl: int | None = None,
+    revoked_store_path: str | None = None,
 ) -> Optional[JWTProvider]:
     """
     Фабрика JWTProvider. Возвращает None если секрет не задан.
@@ -199,6 +265,8 @@ def get_jwt_provider(
         kwargs["access_ttl"] = access_ttl
     if refresh_ttl is not None:
         kwargs["refresh_ttl"] = refresh_ttl
+    if revoked_store_path is not None:
+        kwargs["revoked_store_path"] = revoked_store_path
     try:
         return JWTProvider(**kwargs)
     except ValueError as exc:

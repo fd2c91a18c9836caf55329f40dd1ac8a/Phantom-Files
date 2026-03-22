@@ -92,6 +92,9 @@ def _is_safe_url_runtime(url: str) -> bool:
         return True
     except ValueError:
         pass
+    # NEW-M11: DNS rebinding window exists between this check and actual request.
+    # Accepted risk: re-resolving in urllib would require custom resolver hook.
+    # Defense: _NoRedirect handler prevents redirect-based rebinding.
     try:
         addr_infos = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
     except socket.gaierror:
@@ -229,6 +232,8 @@ class AlertExporter:
         chat_id = os.getenv(self._telegram_chat_id_env, "").strip()
         if not token or not chat_id:
             return True  # Не настроен — не считаем ошибкой
+        # H5 fix: маскируем URL сразу, чтобы токен не утёк в логи при исключении
+        safe_url_for_log = "https://api.telegram.org/bot****/sendMessage"
         decision = payload.get("decision", {})
         context = payload.get("context", {})
         event = context.get("event", {})
@@ -242,10 +247,14 @@ class AlertExporter:
             f"sensor={event.get('source_sensor')}"
         )
         body = parse.urlencode({"chat_id": chat_id, "text": message[:3900]}).encode("utf-8")
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        req = request.Request(url=url, data=body, method="POST")
-        req.add_header("Content-Type", "application/x-www-form-urlencoded")
-        return _retry_request(req)
+        raw_url = f"https://api.telegram.org/bot{token}/sendMessage"
+        try:
+            req = request.Request(url=raw_url, data=body, method="POST")
+            req.add_header("Content-Type", "application/x-www-form-urlencoded")
+            return _retry_request(req)
+        except Exception as exc:
+            logger.error("Telegram send failed: url=%s error=%s", safe_url_for_log, exc)
+            return False
 
     def _enqueue_failed(self, payload: dict[str, Any]) -> None:
         """Сохранение неотправленного алерта в очередь."""
@@ -291,12 +300,27 @@ class AlertExporter:
             logger.warning("Failed to load alert queue: %s", exc)
 
     def _save_pending_queue(self) -> None:
-        """Сохранение очереди алертов в файл."""
+        """Сохранение очереди алертов в файл (R3-H3: atomic write + fsync)."""
         try:
             self._queue_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._queue_path, "w", encoding="utf-8") as fh:
-                for item in self._pending_queue:
-                    fh.write(json.dumps(item, ensure_ascii=False) + "\n")
+            import tempfile as _tempfile
+            fd, tmp_path = _tempfile.mkstemp(
+                dir=str(self._queue_path.parent), suffix=".tmp"
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    for item in self._pending_queue:
+                        fh.write(json.dumps(item, ensure_ascii=False) + "\n")
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp_path, self._queue_path)
+            except BaseException:
+                # Очистка temp файла при ошибке
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
         except Exception as exc:
             logger.warning("Failed to save alert queue: %s", exc)
 
