@@ -65,7 +65,8 @@ def test_rotate_batch(tmp_path):
     reg = _FakeRegistry(entries)
     callback = MagicMock()
     rotator = TrapRotator(
-        reg, callback,
+        reg,
+        callback,
         config={"enabled": True, "batch_size": 3, "min_age_seconds": 60},
     )
 
@@ -85,7 +86,8 @@ def test_rotate_batch_skips_young_files(tmp_path):
     entries = [_FakeEntry(str(f))]
     reg = _FakeRegistry(entries)
     rotator = TrapRotator(
-        reg, lambda x: None,
+        reg,
+        lambda x: None,
         config={"enabled": True, "batch_size": 5, "min_age_seconds": 3600},
     )
 
@@ -110,7 +112,8 @@ def test_rotate_batch_nonexistent_file():
     entries = [_FakeEntry("/nonexistent/path/trap.txt")]
     reg = _FakeRegistry(entries)
     rotator = TrapRotator(
-        reg, lambda x: None,
+        reg,
+        lambda x: None,
         config={"enabled": True, "min_age_seconds": 0},
     )
 
@@ -123,7 +126,8 @@ def test_rotate_batch_nonexistent_file():
 def test_rotator_start_stop():
     reg = _FakeRegistry([])
     rotator = TrapRotator(
-        reg, lambda x: None,
+        reg,
+        lambda x: None,
         config={"enabled": True, "interval_seconds": 60},
     )
     loop = asyncio.new_event_loop()

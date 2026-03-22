@@ -27,7 +27,11 @@ def test_policy_actions_override_active() -> None:
         },
     )
     decision = DecisionEngine(cfg).decide(_context())
-    assert [a.value for a in decision.actions] == ["alert", "collect_forensics", "kill_process"]
+    assert [a.value for a in decision.actions] == [
+        "alert",
+        "collect_forensics",
+        "kill_process",
+    ]
 
 
 def test_policy_actions_override_dry_run() -> None:

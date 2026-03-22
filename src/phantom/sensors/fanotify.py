@@ -13,6 +13,7 @@ import platform
 import struct
 import threading
 import time
+from concurrent.futures import Future
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -107,7 +108,9 @@ def _process_name(pid: int) -> Optional[str]:
 
 def _process_uid(pid: int) -> Optional[int]:
     try:
-        status = Path(f"/proc/{pid}/status").read_text(encoding="utf-8", errors="ignore")
+        status = Path(f"/proc/{pid}/status").read_text(
+            encoding="utf-8", errors="ignore"
+        )
     except OSError:
         return None
     for line in status.splitlines():
@@ -139,7 +142,8 @@ class FanotifySensor(Sensor):
         sensors_cfg = config.get("sensors", {}) if hasattr(config, "get") else {}
         self._permission_timeout_ms = int(sensors_cfg.get("permission_timeout_ms", 50))
         self._whitelist_process_names = {
-            str(x).strip().lower() for x in sensors_cfg.get("whitelist_process_names", [])
+            str(x).strip().lower()
+            for x in sensors_cfg.get("whitelist_process_names", [])
         }
 
     @staticmethod
@@ -164,7 +168,9 @@ class FanotifySensor(Sensor):
         self._reason = ""
 
         self._stop.clear()
-        self._thread = threading.Thread(target=self._reader_loop, daemon=True, name="phantom-fanotify")
+        self._thread = threading.Thread(
+            target=self._reader_loop, daemon=True, name="phantom-fanotify"
+        )
         self._thread.start()
         logger.info("Fanotify sensor started")
 
@@ -183,7 +189,13 @@ class FanotifySensor(Sensor):
         logger.info("Fanotify sensor stopped")
 
     def _fanotify_init(self) -> int:
-        flags = FAN_CLOEXEC | FAN_NONBLOCK | FAN_CLASS_PRE_CONTENT | FAN_UNLIMITED_QUEUE | FAN_UNLIMITED_MARKS
+        flags = (
+            FAN_CLOEXEC
+            | FAN_NONBLOCK
+            | FAN_CLASS_PRE_CONTENT
+            | FAN_UNLIMITED_QUEUE
+            | FAN_UNLIMITED_MARKS
+        )
         event_f_flags = os.O_RDONLY
         libc = ctypes.CDLL(None, use_errno=True)
         fd = libc.syscall(SYS_fanotify_init, flags, event_f_flags)
@@ -193,7 +205,10 @@ class FanotifySensor(Sensor):
         return int(fd)
 
     def _apply_marks(self, fan_fd: int) -> None:
-        dirs = {str(Path(entry.output_path).resolve().parent) for entry in self._registry.entries()}
+        dirs = {
+            str(Path(entry.output_path).resolve().parent)
+            for entry in self._registry.entries()
+        }
         mask = (
             FAN_OPEN_PERM
             | FAN_ACCESS_PERM
@@ -211,10 +226,14 @@ class FanotifySensor(Sensor):
             if not p.exists():
                 continue
             bpath = str(p).encode("utf-8")
-            rc = libc.syscall(SYS_fanotify_mark, fan_fd, mark_flags, mask, -1, ctypes.c_char_p(bpath))
+            rc = libc.syscall(
+                SYS_fanotify_mark, fan_fd, mark_flags, mask, -1, ctypes.c_char_p(bpath)
+            )
             if rc < 0:
                 err = ctypes.get_errno()
-                raise OSError(err, f"fanotify_mark failed for {path}: {os.strerror(err)}")
+                raise OSError(
+                    err, f"fanotify_mark failed for {path}: {os.strerror(err)}"
+                )
 
     def _reader_loop(self) -> None:
         if self._fd is None:
@@ -255,11 +274,15 @@ class FanotifySensor(Sensor):
     def _handle_single_event(self, mask: int, event_fd: int, pid: int) -> None:
         path: Optional[str] = None
         is_perm_event = False
-        perm_responded = False  # C7 fix: предотвращает повторную отправку permission response
+        perm_responded = (
+            False  # C7 fix: предотвращает повторную отправку permission response
+        )
         try:
             path = str(Path(f"/proc/self/fd/{event_fd}").resolve())
             trap = self._registry.lookup(path)
-            is_perm_event = bool(mask & (FAN_OPEN_PERM | FAN_ACCESS_PERM | FAN_OPEN_EXEC_PERM))
+            is_perm_event = bool(
+                mask & (FAN_OPEN_PERM | FAN_ACCESS_PERM | FAN_OPEN_EXEC_PERM)
+            )
 
             if trap is None:
                 if is_perm_event:
@@ -309,7 +332,9 @@ class FanotifySensor(Sensor):
             # Всегда отправляем событие в конвейер аудита/реагирования.
             asyncio.run_coroutine_threadsafe(self._callback(event), self._loop)
         except Exception as exc:
-            logger.error("fanotify event handler failed (pid=%s path=%s): %s", pid, path, exc)
+            logger.error(
+                "fanotify event handler failed (pid=%s path=%s): %s", pid, path, exc
+            )
             # C7 fix: отправляем deny только если ответ ещё не был отправлен
             if is_perm_event and not perm_responded:
                 try:
@@ -324,7 +349,9 @@ class FanotifySensor(Sensor):
 
     def _permission_decision(self, event: Event, timeout_seconds: float) -> bool:
         try:
-            future = asyncio.run_coroutine_threadsafe(self._perm_cb(event), self._loop)
+            future: Future[bool] = asyncio.run_coroutine_threadsafe(
+                self._perm_cb(event), self._loop
+            )
             return bool(future.result(timeout=timeout_seconds))
         except Exception:
             # fail-close при таймауте или ошибках callback

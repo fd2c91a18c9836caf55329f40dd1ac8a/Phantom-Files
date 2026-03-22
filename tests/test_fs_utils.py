@@ -4,8 +4,8 @@ from pathlib import Path
 
 from phantom.utils.fs import safe_mkdirs, atomic_write, read_text_safe, list_files
 
-
 # ---------- safe_mkdirs ----------
+
 
 def test_safe_mkdirs_creates_nested(tmp_path: Path):
     target = str(tmp_path / "a" / "b" / "c")
@@ -28,6 +28,7 @@ def test_safe_mkdirs_idempotent(tmp_path: Path):
 
 
 # ---------- atomic_write ----------
+
 
 def test_atomic_write_creates_file(tmp_path: Path):
     target = str(tmp_path / "out.txt")
@@ -63,6 +64,7 @@ def test_atomic_write_empty(tmp_path: Path):
 
 # ---------- read_text_safe ----------
 
+
 def test_read_text_safe_existing(tmp_path: Path):
     f = tmp_path / "data.txt"
     f.write_text("content")
@@ -84,6 +86,7 @@ def test_read_text_safe_unicode(tmp_path: Path):
 
 
 # ---------- list_files ----------
+
 
 def test_list_files_basic(tmp_path: Path):
     (tmp_path / "a.txt").write_text("a")

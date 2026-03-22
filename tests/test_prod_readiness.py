@@ -33,7 +33,9 @@ def test_check_config_sections(tmp_path):
     results: list[prod.CheckResult] = []
     loaded = prod._check_config(results, path)
     assert loaded["paths"]["logs_dir"] == "/tmp"
-    assert any(item.name == "config_sections" and item.status == "pass" for item in results)
+    assert any(
+        item.name == "config_sections" and item.status == "pass" for item in results
+    )
 
 
 def test_check_os_kernel_non_linux(monkeypatch):

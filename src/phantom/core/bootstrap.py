@@ -40,11 +40,15 @@ def _require_root() -> None:
 def _run(cmd: list[str]) -> None:
     # NEW-H1 fix: timeout=30 чтобы не повиснуть навсегда
     try:
-        proc = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=30)
+        proc = subprocess.run(
+            cmd, check=False, capture_output=True, text=True, timeout=30
+        )
     except subprocess.TimeoutExpired as exc:
         raise BootstrapError(f"Command timed out after 30s: {cmd!r}") from exc
     if proc.returncode != 0:
-        raise BootstrapError((proc.stderr or proc.stdout or "").strip() or f"Command failed: {cmd!r}")
+        raise BootstrapError(
+            (proc.stderr or proc.stdout or "").strip() or f"Command failed: {cmd!r}"
+        )
 
 
 def _group_exists(name: str) -> bool:
@@ -88,7 +92,15 @@ def ensure_user(
     args = ["useradd"]
     if system:
         args.append("--system")
-    args += ["--home", home_dir, "--shell", shell, "--gid", primary_group, "--create-home"]
+    args += [
+        "--home",
+        home_dir,
+        "--shell",
+        shell,
+        "--gid",
+        primary_group,
+        "--create-home",
+    ]
     extras = [g for g in extra_groups if g]
     if extras:
         args += ["--groups", ",".join(extras)]
@@ -142,7 +154,11 @@ def _iter_bootstrap_dirs(cfg: dict) -> list[str]:
         if isinstance(val, str) and val.strip():
             candidates.append(str(Path(val).parent))
 
-    chain_state = cfg.get("forensics", {}).get("chain_state_file") if isinstance(cfg.get("forensics", {}), dict) else None
+    chain_state = (
+        cfg.get("forensics", {}).get("chain_state_file")
+        if isinstance(cfg.get("forensics", {}), dict)
+        else None
+    )
     if isinstance(chain_state, str) and chain_state.strip():
         candidates.append(str(Path(chain_state).parent))
 
@@ -187,17 +203,24 @@ def bootstrap(
 
     _do(
         f"ensure user: {plan.user}",
+        # Bandit false positive: validated login shell path, not shell command input.
         lambda: ensure_user(
             plan.user,
             primary_group=plan.group_user,
             extra_groups=(plan.group_admin,),
             home_dir=plan.home_dir,
-            shell=plan.shell,
+            shell=plan.shell,  # nosec B604
         ),
     )
 
     # Базовые каталоги (создаём первыми, чтобы родители существовали).
-    base_system_dirs = ["/var/lib/phantom", "/var/log/phantom", "/etc/phantom", "/etc/phantom/keys", "/etc/phantom/templates"]
+    base_system_dirs = [
+        "/var/lib/phantom",
+        "/var/log/phantom",
+        "/etc/phantom",
+        "/etc/phantom/keys",
+        "/etc/phantom/templates",
+    ]
     for d in base_system_dirs:
         if d not in dirs:
             dirs.append(d)
@@ -207,15 +230,21 @@ def bootstrap(
     # - /etc/phantom принадлежит root, читается phantom-user
     for d in sorted(set(dirs)):
         p = Path(d)
-        if str(p).startswith("/var/log/phantom") or str(p).startswith("/var/lib/phantom"):
+        if str(p).startswith("/var/log/phantom") or str(p).startswith(
+            "/var/lib/phantom"
+        ):
             _do(
                 f"ensure dir: {d} (phantom:{plan.group_user}, 0750)",
-                lambda d=d: ensure_dir(d, owner_user=plan.user, owner_group=plan.group_user, mode=0o750),
+                lambda d=d: ensure_dir(
+                    d, owner_user=plan.user, owner_group=plan.group_user, mode=0o750
+                ),
             )
         elif str(p).startswith("/etc/phantom"):
             _do(
                 f"ensure dir: {d} (root:{plan.group_user}, 0750)",
-                lambda d=d: ensure_dir(d, owner_user="root", owner_group=plan.group_user, mode=0o750),
+                lambda d=d: ensure_dir(
+                    d, owner_user="root", owner_group=plan.group_user, mode=0o750
+                ),
             )
         else:
             _do(
@@ -224,4 +253,3 @@ def bootstrap(
             )
 
     return actions
-

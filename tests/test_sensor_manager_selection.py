@@ -22,7 +22,9 @@ class _BaseSensor:
     def health(self):
         from phantom.sensors.base import SensorHealth
 
-        return SensorHealth(name="dummy", running=self.started, degraded=False, reason="")
+        return SensorHealth(
+            name="dummy", running=self.started, degraded=False, reason=""
+        )
 
 
 class _DummyEbpf(_BaseSensor):

@@ -5,10 +5,15 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from phantom.core.state import EventType, RunMode
-from phantom.sensors.ebpf import EbpfSensor, _trap_id_hash, _check_bpf_lsm_available, _EVENT_MAP
-
+from phantom.sensors.ebpf import (
+    EbpfSensor,
+    _trap_id_hash,
+    _check_bpf_lsm_available,
+    _EVENT_MAP,
+)
 
 # ---------- _trap_id_hash ----------
+
 
 def test_trap_id_hash_is_nonzero():
     """Хеш trap_id всегда non-zero (требование BPF map value)."""
@@ -30,6 +35,7 @@ def test_trap_id_hash_unique():
 
 
 # ---------- _check_bpf_lsm_available ----------
+
 
 def test_check_bpf_lsm_no_securityfs():
     """Без securityfs — BPF LSM недоступен."""
@@ -68,6 +74,7 @@ def test_check_bpf_lsm_available():
 
 # ---------- _EVENT_MAP ----------
 
+
 def test_event_map_coverage():
     """Все 8 типов событий покрыты."""
     assert len(_EVENT_MAP) == 8
@@ -82,6 +89,7 @@ def test_event_map_coverage():
 
 
 # ---------- EbpfSensor ----------
+
 
 def test_is_available_no_bcc():
     """Без BCC — сенсор недоступен."""
@@ -98,7 +106,9 @@ def test_sensor_constructor():
     loop = asyncio.new_event_loop()
     try:
         sensor = EbpfSensor(
-            config={"sensors": {"ebpf_poll_timeout_ms": 100, "whitelist_uids": [0, 65534]}},
+            config={
+                "sensors": {"ebpf_poll_timeout_ms": 100, "whitelist_uids": [0, 65534]}
+            },
             callback=lambda e: None,
             trap_registry=MagicMock(),
             permission_callback=lambda e: True,
@@ -194,6 +204,7 @@ def test_path_resolution_invalid():
 
 
 # ---------- SensorManager integration ----------
+
 
 def test_manager_ebpf_stats_empty():
     """ebpf_stats пуст когда eBPF не запущен."""

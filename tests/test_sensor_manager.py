@@ -21,6 +21,7 @@ def _make_sm(**kwargs):
 
 # ---------- health ----------
 
+
 def test_health_not_started():
     """До старта — degraded."""
     sm, loop = _make_sm()
@@ -40,6 +41,7 @@ def test_health_has_expected_fields():
 
 # ---------- mode ----------
 
+
 def test_mode_unknown_before_start():
     sm, loop = _make_sm()
     assert sm.mode == "unknown"
@@ -47,6 +49,7 @@ def test_mode_unknown_before_start():
 
 
 # ---------- pause / stop ----------
+
 
 def test_has_pause_method():
     sm, loop = _make_sm()
@@ -78,6 +81,7 @@ def test_pause_without_start():
 
 # ---------- set_mode ----------
 
+
 def test_has_set_mode():
     sm, loop = _make_sm()
     assert hasattr(sm, "set_mode")
@@ -86,6 +90,7 @@ def test_has_set_mode():
 
 
 # ---------- reload_traps ----------
+
 
 def test_has_reload_traps():
     sm, loop = _make_sm()
@@ -102,6 +107,7 @@ def test_reload_traps_without_start():
 
 # ---------- ebpf_stats ----------
 
+
 def test_ebpf_stats_empty():
     """ebpf_stats пуст когда eBPF не запущен."""
     sm, loop = _make_sm()
@@ -110,6 +116,7 @@ def test_ebpf_stats_empty():
 
 
 # ---------- config ----------
+
 
 def test_accepts_config():
     """SensorManager принимает конфигурацию."""

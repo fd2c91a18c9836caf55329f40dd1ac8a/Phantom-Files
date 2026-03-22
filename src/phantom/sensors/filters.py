@@ -38,8 +38,10 @@ class DebounceFilter:
             del self._seen[k]
         if len(self._seen) > self._max_keys:
             # Аварийная очистка: оставляем только самые свежие
-            sorted_keys = sorted(self._seen, key=self._seen.get, reverse=True)
-            for k in sorted_keys[self._max_keys:]:
+            sorted_keys = sorted(
+                self._seen, key=lambda key: self._seen[key], reverse=True
+            )
+            for k in sorted_keys[self._max_keys :]:
                 del self._seen[k]
 
 

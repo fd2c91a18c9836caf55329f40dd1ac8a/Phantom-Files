@@ -71,7 +71,9 @@ async def _start_asgi_server(
         rate_limit = int(api_cfg.get("rate_limit_per_minute", 60))
     except (TypeError, ValueError):
         rate_limit = 60
-    mtls_token_env = str(api_cfg.get("mtls_proxy_token_env", "PHANTOM_MTLS_PROXY_TOKEN"))
+    mtls_token_env = str(
+        api_cfg.get("mtls_proxy_token_env", "PHANTOM_MTLS_PROXY_TOKEN")
+    )
     mtls_proxy_token = os.getenv(mtls_token_env, "").strip()
 
     app = create_asgi_app(
@@ -113,7 +115,9 @@ async def _start_asgi_server(
         if server.started:
             break
     if server.started:
-        logger.info("ASGI server started on %s:%s (TLS=%s)", bind, port, bool(ssl_certfile))
+        logger.info(
+            "ASGI server started on %s:%s (TLS=%s)", bind, port, bool(ssl_certfile)
+        )
     else:
         logger.warning("ASGI server may not have started on %s:%s", bind, port)
     return server
@@ -138,14 +142,18 @@ def _load_api_role_keys(api_cfg: dict[str, object]) -> dict[str, str]:
     return keys
 
 
-def _api_cfg_fingerprint(api_cfg: dict[str, object], api_role_keys: dict[str, str]) -> str:
+def _api_cfg_fingerprint(
+    api_cfg: dict[str, object], api_role_keys: dict[str, str]
+) -> str:
     """Хэш конфигурации API (включая секреты из ENV) для hot-reload.
 
     NEW-C1 fix: секреты хэшируются по отдельности, чтобы не хранить их
     в единой JSON-строке в памяти.
     """
     api_key_env = str(api_cfg.get("api_key_env", "PHANTOM_API_KEY"))
-    mtls_token_env = str(api_cfg.get("mtls_proxy_token_env", "PHANTOM_MTLS_PROXY_TOKEN"))
+    mtls_token_env = str(
+        api_cfg.get("mtls_proxy_token_env", "PHANTOM_MTLS_PROXY_TOKEN")
+    )
 
     def _h(s: str) -> str:
         return hashlib.sha256(s.encode("utf-8")).hexdigest()
@@ -255,8 +263,14 @@ async def _async_main() -> int:
         orchestrator.set_sensor_degraded(sensor_health.degraded)
         if bool(api_cfg.get("enabled", True)):
             api_server = await _start_asgi_server(
-                api_bind, api_port, api_cfg, api_role_keys,
-                sensor_manager, precapture, orchestrator, control,
+                api_bind,
+                api_port,
+                api_cfg,
+                api_role_keys,
+                sensor_manager,
+                precapture,
+                orchestrator,
+                control,
             )
         logger.info("Phantom started. sensor_mode=%s", sensor_manager.mode)
         while not stop_event.is_set():
@@ -330,7 +344,9 @@ async def _async_main() -> int:
                     sensor_health = sensor_manager.health
                     orchestrator.set_sensor_degraded(sensor_health.degraded)
                     if sensor_health.degraded:
-                        logger.critical("Sensor degraded after reload: %s", sensor_health.reason)
+                        logger.critical(
+                            "Sensor degraded after reload: %s", sensor_health.reason
+                        )
 
                     # Перезапуск ротатора с новой конфигурацией
                     rotator.stop()
@@ -367,8 +383,14 @@ async def _async_main() -> int:
                                 if not api_server.started:
                                     break
                         api_server = await _start_asgi_server(
-                            re_bind, re_port, re_api_cfg, re_api_keys,
-                            sensor_manager, precapture, orchestrator, control,
+                            re_bind,
+                            re_port,
+                            re_api_cfg,
+                            re_api_keys,
+                            sensor_manager,
+                            precapture,
+                            orchestrator,
+                            control,
                         )
                         api_bind = re_bind
                         api_port = re_port

@@ -178,7 +178,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         start = time.monotonic()
         response = await call_next(request)
         elapsed = time.monotonic() - start
-        REQUEST_COUNT.labels(method=method, path=path, status=response.status_code).inc()
+        REQUEST_COUNT.labels(
+            method=method, path=path, status=response.status_code
+        ).inc()
         REQUEST_LATENCY.labels(method=method, path=path).observe(elapsed)
         return response
 
@@ -186,6 +188,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     def _normalize_path(path: str) -> str:
         """Нормализация пути к шаблону маршрута для предотвращения cardinality explosion."""
         import re
+
         path = re.sub(r"/incidents/[^/]+", "/incidents/{id}", path)
         path = re.sub(r"/templates/[^/]+", "/templates/{name}", path)
         path = re.sub(r"/blocks/[^/]+", "/blocks/{id}", path)
@@ -193,6 +196,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
 
 # ---------- ASGI Application ----------
+
 
 def create_asgi_app(
     *,
@@ -305,7 +309,9 @@ def create_asgi_app(
         if not subject:
             subject = request.headers.get("x-ssl-client-s-dn", "").strip()
         if not subject:
-            logger.warning("mTLS verified header present but client cert subject is missing")
+            logger.warning(
+                "mTLS verified header present but client cert subject is missing"
+            )
             return False
         if not _mtls_proxy_token:
             logger.error("mTLS mode is enabled, but mtls_proxy_token is not configured")
@@ -319,7 +325,10 @@ def create_asgi_app(
             return False
         return True
 
-    def _require_auth(request: Request, required_roles: set[str] | None = None) -> tuple[str | None, Response | None]:
+    def _require_auth(
+        request: Request,
+        required_roles: set[str] | None = None,
+    ) -> tuple[str | None, JSONResponse | None]:
         """Проверка авторизации. Возвращает (role, error_response)."""
         role = _resolve_role(request)
         if role is None:
@@ -328,7 +337,7 @@ def create_asgi_app(
             return role, JSONResponse({"error": "forbidden"}, status_code=403)
         return role, None
 
-    async def _read_json(request: Request) -> tuple[dict | None, str | None]:
+    async def _read_json(request: Request) -> tuple[object | None, str | None]:
         """Чтение и парсинг JSON-тела запроса."""
         try:
             body = await _read_body_limited(request)
@@ -456,14 +465,20 @@ def create_asgi_app(
             return JSONResponse({"error": "body_too_large"}, status_code=413)
         if parse_err is not None:
             return JSONResponse({"error": "invalid_json"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "expected_json_object"}, status_code=400)
         if _control is not None:
             try:
                 result = await _control.create_block(payload, role=role)
                 return JSONResponse(result, status_code=201)
             except PermissionError as exc:
-                return JSONResponse({"error": "forbidden", "detail": str(exc)}, status_code=403)
+                return JSONResponse(
+                    {"error": "forbidden", "detail": str(exc)}, status_code=403
+                )
             except Exception as exc:
-                return JSONResponse({"error": "invalid_request", "detail": str(exc)}, status_code=400)
+                return JSONResponse(
+                    {"error": "invalid_request", "detail": str(exc)}, status_code=400
+                )
         return JSONResponse({"error": "not_available"}, status_code=503)
 
     async def get_templates(request: Request) -> JSONResponse:
@@ -483,14 +498,20 @@ def create_asgi_app(
             return JSONResponse({"error": "body_too_large"}, status_code=413)
         if parse_err is not None:
             return JSONResponse({"error": "invalid_json"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "expected_json_object"}, status_code=400)
         if _control is not None:
             try:
                 result = _control.mutate_templates(payload, role=role)
                 return JSONResponse(result, status_code=201)
             except PermissionError as exc:
-                return JSONResponse({"error": "forbidden", "detail": str(exc)}, status_code=403)
+                return JSONResponse(
+                    {"error": "forbidden", "detail": str(exc)}, status_code=403
+                )
             except Exception as exc:
-                return JSONResponse({"error": "invalid_request", "detail": str(exc)}, status_code=400)
+                return JSONResponse(
+                    {"error": "invalid_request", "detail": str(exc)}, status_code=400
+                )
         return JSONResponse({"error": "not_available"}, status_code=503)
 
     async def get_policies(request: Request) -> JSONResponse:
@@ -515,8 +536,10 @@ def create_asgi_app(
         # Запрет изменения mode через API
         if "mode" in payload:
             return JSONResponse(
-                {"error": "mode_change_forbidden",
-                 "detail": "Mode change is only allowed via CLI with root privileges"},
+                {
+                    "error": "mode_change_forbidden",
+                    "detail": "Mode change is only allowed via CLI with root privileges",
+                },
                 status_code=403,
             )
         if _control is not None:
@@ -524,9 +547,13 @@ def create_asgi_app(
                 result = _control.update_policies(payload, role=role, replace=False)
                 return JSONResponse(result)
             except PermissionError as exc:
-                return JSONResponse({"error": "forbidden", "detail": str(exc)}, status_code=403)
+                return JSONResponse(
+                    {"error": "forbidden", "detail": str(exc)}, status_code=403
+                )
             except Exception as exc:
-                return JSONResponse({"error": "invalid_request", "detail": str(exc)}, status_code=400)
+                return JSONResponse(
+                    {"error": "invalid_request", "detail": str(exc)}, status_code=400
+                )
         return JSONResponse({"error": "not_available"}, status_code=503)
 
     async def put_policies(request: Request) -> JSONResponse:
@@ -542,8 +569,10 @@ def create_asgi_app(
             return JSONResponse({"error": "object_expected"}, status_code=400)
         if "mode" in payload:
             return JSONResponse(
-                {"error": "mode_change_forbidden",
-                 "detail": "Mode change is only allowed via CLI with root privileges"},
+                {
+                    "error": "mode_change_forbidden",
+                    "detail": "Mode change is only allowed via CLI with root privileges",
+                },
                 status_code=403,
             )
         if _control is not None:
@@ -551,9 +580,13 @@ def create_asgi_app(
                 result = _control.update_policies(payload, role=role, replace=True)
                 return JSONResponse(result)
             except PermissionError as exc:
-                return JSONResponse({"error": "forbidden", "detail": str(exc)}, status_code=403)
+                return JSONResponse(
+                    {"error": "forbidden", "detail": str(exc)}, status_code=403
+                )
             except Exception as exc:
-                return JSONResponse({"error": "invalid_request", "detail": str(exc)}, status_code=400)
+                return JSONResponse(
+                    {"error": "invalid_request", "detail": str(exc)}, status_code=400
+                )
         return JSONResponse({"error": "not_available"}, status_code=503)
 
     # ---------- Маршруты ----------

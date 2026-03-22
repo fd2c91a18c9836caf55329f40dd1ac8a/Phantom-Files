@@ -76,7 +76,9 @@ class OrchestratorConfig:
             act_timeout=float(data.get("act_timeout", 60.0)),
             event_queue_size=int(data.get("event_queue_size", 2000)),
             worker_count=max(1, int(data.get("worker_count", 4))),
-            dedup_window_seconds=float(data.get("event_dedup_window", data.get("dedup_window_seconds", 2.0))),
+            dedup_window_seconds=float(
+                data.get("event_dedup_window", data.get("dedup_window_seconds", 2.0))
+            ),
             auto_execute=bool(data.get("auto_execute", True)),
             min_severity=_severity_from_name(str(data.get("min_severity", "INFO"))),
             mode=mode,
@@ -100,9 +102,15 @@ class TelemetryCollector:
     async def initialize(self) -> None:
         if self._initialized:
             return
-        self._process_collector = self._try_import("phantom.telemetry.processes", "ProcessCollector")
-        self._fs_collector = self._try_import("phantom.telemetry.file_system", "FileSystemCollector")
-        self._network_collector = self._try_import("phantom.telemetry.network", "NetworkCollector")
+        self._process_collector = self._try_import(
+            "phantom.telemetry.processes", "ProcessCollector"
+        )
+        self._fs_collector = self._try_import(
+            "phantom.telemetry.file_system", "FileSystemCollector"
+        )
+        self._network_collector = self._try_import(
+            "phantom.telemetry.network", "NetworkCollector"
+        )
         self._initialized = True
 
     def _try_import(self, module_path: str, class_name: str) -> Optional[Any]:
@@ -121,7 +129,11 @@ class TelemetryCollector:
             await self.initialize()
 
         results = await asyncio.gather(
-            self._collect_proc(event.process_pid) if event.process_pid else self._noop(),
+            (
+                self._collect_proc(event.process_pid)
+                if event.process_pid
+                else self._noop()
+            ),
             self._collect_fs(event.target_path),
             self._collect_net(event.process_pid) if event.process_pid else self._noop(),
             return_exceptions=True,
@@ -167,7 +179,9 @@ class ThreatAnalyzer:
         self._config = config
         self._whitelist_lower = {p.lower() for p in config.whitelist_process_names}
 
-    def analyze(self, event: Event, process: Optional[ProcessInfo]) -> tuple[ThreatCategory, float, frozenset[str]]:
+    def analyze(
+        self, event: Event, process: Optional[ProcessInfo]
+    ) -> tuple[ThreatCategory, float, frozenset[str]]:
         indicators: set[str] = set()
         score = 0.75
         category = ThreatCategory.RECONNAISSANCE
@@ -180,7 +194,18 @@ class ThreatAnalyzer:
             name = process.name.lower()
             if name in self._whitelist_lower:
                 return ThreatCategory.UNKNOWN, 0.0, frozenset({"whitelist_process"})
-            if name in {"bash", "sh", "zsh", "python", "perl", "ruby", "curl", "wget", "ncat", "nc"}:
+            if name in {
+                "bash",
+                "sh",
+                "zsh",
+                "python",
+                "perl",
+                "ruby",
+                "curl",
+                "wget",
+                "ncat",
+                "nc",
+            }:
                 indicators.add(f"suspicious_process:{name}")
                 score = min(1.0, score + 0.04)
 
@@ -207,7 +232,10 @@ class DecisionEngine:
             "ip_block_ttl_seconds": self._config.ip_block_ttl_seconds,
             "act_timeout_seconds": self._config.act_timeout,
         }
-        rationale = [f"mode={self._config.mode.value}", f"severity={context.severity.name}"]
+        rationale = [
+            f"mode={self._config.mode.value}",
+            f"severity={context.severity.name}",
+        ]
         policy = self._resolve_policy_for_mode(self._config.mode)
         if policy:
             parsed_actions = self._parse_actions(policy.get("actions"))
@@ -222,19 +250,25 @@ class DecisionEngine:
         if self._config.mode in {RunMode.DRY_RUN, RunMode.OBSERVATION}:
             # R3-M4 fix: defense-in-depth — фильтруем деструктивные действия
             # на уровне DecisionEngine, не полагаясь только на Dispatcher gate
-            _DESTRUCTIVE = frozenset({
-                ResponseAction.ISOLATE_PROCESS,
-                ResponseAction.BLOCK_NETWORK,
-                ResponseAction.BLOCK_IP,
-                ResponseAction.KILL_PROCESS,
-                ResponseAction.QUARANTINE_FILE,
-                ResponseAction.SCAN_PERSISTENCE,
-                ResponseAction.KILL_USER_SESSIONS,
-            })
+            _DESTRUCTIVE = frozenset(
+                {
+                    ResponseAction.ISOLATE_PROCESS,
+                    ResponseAction.BLOCK_NETWORK,
+                    ResponseAction.BLOCK_IP,
+                    ResponseAction.KILL_PROCESS,
+                    ResponseAction.QUARANTINE_FILE,
+                    ResponseAction.SCAN_PERSISTENCE,
+                    ResponseAction.KILL_USER_SESSIONS,
+                }
+            )
             actions = [a for a in actions if a not in _DESTRUCTIVE]
             if ResponseAction.COLLECT_FORENSICS not in actions:
                 actions.append(ResponseAction.COLLECT_FORENSICS)
-            mode_label = "dry_run_no_block" if self._config.mode == RunMode.DRY_RUN else "observation_mode"
+            mode_label = (
+                "dry_run_no_block"
+                if self._config.mode == RunMode.DRY_RUN
+                else "observation_mode"
+            )
             rationale.append(mode_label)
             return Decision.from_context(
                 context=context,
@@ -266,7 +300,12 @@ class DecisionEngine:
         remote_ips: list[str] = []
         if context.network:
             for conn in context.network.connections:
-                if conn.remote_addr and conn.remote_addr not in {"127.0.0.1", "::1", "0.0.0.0"}:
+                # Bandit false positive: filtering wildcard remote addresses, not binding a socket.
+                if conn.remote_addr and conn.remote_addr not in {
+                    "127.0.0.1",
+                    "::1",
+                    "0.0.0.0",  # nosec B104
+                }:
                     remote_ips.append(conn.remote_addr)
         if remote_ips:
             params["ip_blacklist"] = list(dict.fromkeys(remote_ips))
@@ -336,11 +375,15 @@ class Orchestrator:
         self._analyzer = ThreatAnalyzer(self._config)
         self._engine = DecisionEngine(self._config)
         self._incidents = IncidentStore(self._config.dedup_window_seconds)
-        self._whitelist_lower = {p.lower() for p in self._config.whitelist_process_names}
+        self._whitelist_lower = {
+            p.lower() for p in self._config.whitelist_process_names
+        }
         self._reload_lock = asyncio.Lock()
 
         self._dispatcher: Optional[Any] = None
-        self._event_queue: asyncio.Queue[Optional[Event]] = asyncio.Queue(maxsize=self._config.event_queue_size)
+        self._event_queue: asyncio.Queue[Optional[Event]] = asyncio.Queue(
+            maxsize=self._config.event_queue_size
+        )
         self._workers: List[asyncio.Task] = []
         self._pending_actions: Set[asyncio.Task] = set()
         self._decision_callbacks: List[DecisionCallback] = []
@@ -483,14 +526,19 @@ class Orchestrator:
     async def _process_event(self, event: Event) -> None:
         incident = await self._incidents.upsert(event)
         try:
-            context = await asyncio.wait_for(self._orient(event, incident.event_count, incident.incident_id), timeout=self._config.orient_timeout)
+            context = await asyncio.wait_for(
+                self._orient(event, incident.event_count, incident.incident_id),
+                timeout=self._config.orient_timeout,
+            )
         except asyncio.TimeoutError:
             if self._sensor_degraded and self._config.fail_close:
                 logger.critical("Orient timeout in degraded mode: enforcing fail-close")
             context = Context(
                 event=event,
                 threat_category=ThreatCategory.UNKNOWN,
-                threat_score=1.0 if (self._sensor_degraded and self._config.fail_close) else 0.5,
+                threat_score=(
+                    1.0 if (self._sensor_degraded and self._config.fail_close) else 0.5
+                ),
                 anomaly_indicators=frozenset({"timeout:orient"}),
                 incident_id=incident.incident_id,
                 event_count=incident.event_count,
@@ -511,7 +559,9 @@ class Orchestrator:
         if decision.auto_execute and decision.actions:
             self._dispatch_act(decision)
 
-    async def _orient(self, event: Event, event_count: int, incident_id: str) -> Context:
+    async def _orient(
+        self, event: Event, event_count: int, incident_id: str
+    ) -> Context:
         process, file_info, network = await self._telemetry.collect(event)
         category, score, indicators = self._analyzer.analyze(event, process)
         if "whitelist_process" in indicators:
@@ -539,7 +589,9 @@ class Orchestrator:
             event_count=event_count,
         )
 
-    async def _safe_callback(self, callback: DecisionCallback, decision: Decision) -> None:
+    async def _safe_callback(
+        self, callback: DecisionCallback, decision: Decision
+    ) -> None:
         try:
             await callback(decision)
         except Exception as exc:
@@ -565,14 +617,16 @@ class Orchestrator:
     async def _inc_stat(self, key: str, delta: int = 1) -> None:
         """Потокобезопасное обновление счётчика."""
         async with self._stats_lock:
-            self._stats[key] = self._stats.get(key, 0) + delta
+            self._stats[key] = int(self._stats.get(key, 0)) + delta
 
     @property
     def stats(self) -> Dict[str, Any]:
         return dict(self._stats)
 
 
-def create_orchestrator(config_path: Optional[str] = None, sensor_degraded: bool = False) -> Orchestrator:
+def create_orchestrator(
+    config_path: Optional[str] = None, sensor_degraded: bool = False
+) -> Orchestrator:
     from phantom.core.config import get_config
 
     raw = get_config(config_path)

@@ -15,8 +15,8 @@ from phantom.utils.crypto import (
     sign_ed25519,
 )
 
-
 # ---------- random_token ----------
+
 
 def test_random_token_default_length():
     token = random_token()
@@ -42,6 +42,7 @@ def test_random_token_uniqueness():
 
 # ---------- uuid4_str ----------
 
+
 def test_uuid4_str_format():
     uid = uuid4_str()
     assert isinstance(uid, str)
@@ -56,6 +57,7 @@ def test_uuid4_str_unique():
 
 
 # ---------- hash_file ----------
+
 
 def test_hash_file_sha256(tmp_path: Path):
     f = tmp_path / "test.txt"
@@ -96,6 +98,7 @@ def test_hash_file_deterministic(tmp_path: Path):
 
 # ---------- md5_file / sha1_file / sha256_file ----------
 
+
 def test_md5_file(tmp_path: Path):
     f = tmp_path / "t.txt"
     f.write_text("test")
@@ -131,6 +134,7 @@ def test_sha256_file_nonexistent():
 
 # ---------- watermark_id ----------
 
+
 def test_watermark_id_default_prefix():
     wid = watermark_id()
     assert wid.startswith("wt-")
@@ -148,6 +152,7 @@ def test_watermark_id_unique():
 
 
 # ---------- sign_ed25519 ----------
+
 
 def test_sign_ed25519_roundtrip():
     """Подпись Ed25519 верифицируется публичным ключом."""

@@ -49,8 +49,13 @@ _CRON_DIRS = [
 
 # Shell RC-файлы (проверяем для конкретного пользователя)
 _SHELL_RC_FILES = [
-    ".bashrc", ".bash_profile", ".bash_login", ".profile",
-    ".zshrc", ".zprofile", ".zlogin",
+    ".bashrc",
+    ".bash_profile",
+    ".bash_login",
+    ".profile",
+    ".zshrc",
+    ".zprofile",
+    ".zlogin",
     ".config/fish/config.fish",
 ]
 
@@ -58,12 +63,13 @@ _SHELL_RC_FILES = [
 @dataclass
 class PersistenceFinding:
     """Одна найденная точка закрепления."""
-    category: str       # cron, ssh_key, systemd, shell_rc, at_job, binary, session
-    severity: str       # critical, high, medium, low
-    path: str           # путь к файлу или описание
-    detail: str         # подробности (содержимое строки, имя сервиса, etc.)
-    user: str           # владелец / связанный пользователь
-    neutralized: bool = False   # было ли нейтрализовано
+
+    category: str  # cron, ssh_key, systemd, shell_rc, at_job, binary, session
+    severity: str  # critical, high, medium, low
+    path: str  # путь к файлу или описание
+    detail: str  # подробности (содержимое строки, имя сервиса, etc.)
+    user: str  # владелец / связанный пользователь
+    neutralized: bool = False  # было ли нейтрализовано
     neutralize_detail: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,6 +87,7 @@ class PersistenceFinding:
 @dataclass
 class PersistenceScanResult:
     """Результат сканирования на persistence."""
+
     findings: list[PersistenceFinding] = field(default_factory=list)
     scanned_at: str = ""
     target_uid: int | None = None
@@ -124,6 +131,7 @@ class PersistenceScanner:
             timeout: Максимальное время сканирования.
         """
         import time as _time
+
         start = _time.monotonic()
         result = PersistenceScanResult(
             scanned_at=datetime.now(timezone.utc).isoformat(),
@@ -197,6 +205,7 @@ class PersistenceScanner:
                     if len(parts) >= 2 and parts[1].isdigit():
                         uid = int(parts[1])
                         import pwd
+
                         try:
                             username = pwd.getpwuid(uid).pw_name
                         except KeyError:
@@ -208,9 +217,12 @@ class PersistenceScanner:
 
     # ---------- Сканеры по категориям ----------
 
-    def _scan_cron(self, uid: int, username: str | None, deadline: float) -> list[PersistenceFinding]:
+    def _scan_cron(
+        self, uid: int, username: str | None, deadline: float
+    ) -> list[PersistenceFinding]:
         """Сканирование cron задач."""
         import time as _time
+
         findings: list[PersistenceFinding] = []
 
         # Пользовательский crontab
@@ -218,21 +230,28 @@ class PersistenceScanner:
             try:
                 proc = subprocess.run(
                     ["crontab", "-l", "-u", username],
-                    check=False, capture_output=True, text=True, timeout=5,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
                 if proc.returncode == 0 and proc.stdout.strip():
                     for line in proc.stdout.strip().splitlines():
                         line = line.strip()
                         if not line or line.startswith("#"):
                             continue
-                        severity = "high" if _SUSPICIOUS_PATTERNS.search(line) else "medium"
-                        findings.append(PersistenceFinding(
-                            category="cron",
-                            severity=severity,
-                            path=f"crontab -u {username}",
-                            detail=line[:500],
-                            user=username or str(uid),
-                        ))
+                        severity = (
+                            "high" if _SUSPICIOUS_PATTERNS.search(line) else "medium"
+                        )
+                        findings.append(
+                            PersistenceFinding(
+                                category="cron",
+                                severity=severity,
+                                path=f"crontab -u {username}",
+                                detail=line[:500],
+                                user=username or str(uid),
+                            )
+                        )
             except Exception:
                 pass
 
@@ -250,21 +269,29 @@ class PersistenceScanner:
                     stat = cron_file.stat()
                     # Проверяем файлы, принадлежащие атакующему UID
                     if stat.st_uid == uid:
-                        text = cron_file.read_text(encoding="utf-8", errors="ignore")[:4096]
-                        severity = "critical" if _SUSPICIOUS_PATTERNS.search(text) else "high"
-                        findings.append(PersistenceFinding(
-                            category="cron",
-                            severity=severity,
-                            path=str(cron_file),
-                            detail=text[:500],
-                            user=username or str(uid),
-                        ))
+                        text = cron_file.read_text(encoding="utf-8", errors="ignore")[
+                            :4096
+                        ]
+                        severity = (
+                            "critical" if _SUSPICIOUS_PATTERNS.search(text) else "high"
+                        )
+                        findings.append(
+                            PersistenceFinding(
+                                category="cron",
+                                severity=severity,
+                                path=str(cron_file),
+                                detail=text[:500],
+                                user=username or str(uid),
+                            )
+                        )
                 except Exception:
                     continue
 
         return findings
 
-    def _scan_ssh_keys(self, uid: int, username: str | None, deadline: float) -> list[PersistenceFinding]:
+    def _scan_ssh_keys(
+        self, uid: int, username: str | None, deadline: float
+    ) -> list[PersistenceFinding]:
         """Сканирование SSH authorized_keys на добавленные ключи."""
         findings: list[PersistenceFinding] = []
         if not username:
@@ -272,6 +299,7 @@ class PersistenceScanner:
 
         # Определяем home-директорию
         import pwd
+
         try:
             home = Path(pwd.getpwuid(uid).pw_dir)
         except KeyError:
@@ -292,6 +320,7 @@ class PersistenceScanner:
 
             if keys:
                 import time as _time
+
                 # H10 fix: файл, изменённый менее 24 часов назад — подозрительнее
                 recently_modified = (_time.time() - stat.st_mtime) < 86400
                 # Каждый ключ — потенциальная точка возврата
@@ -303,37 +332,45 @@ class PersistenceScanner:
                     # Недавно изменённый = high (вероятно добавлен атакующим).
                     # Давно существующий = medium (может быть легитимным).
                     severity = "high" if recently_modified else "medium"
-                    findings.append(PersistenceFinding(
-                        category="ssh_key",
-                        severity=severity,
-                        path=str(auth_keys),
-                        detail=f"SSH key: {comment} (key_type={parts[0] if parts else 'unknown'})",
-                        user=username,
-                    ))
+                    findings.append(
+                        PersistenceFinding(
+                            category="ssh_key",
+                            severity=severity,
+                            path=str(auth_keys),
+                            detail=f"SSH key: {comment} (key_type={parts[0] if parts else 'unknown'})",
+                            user=username,
+                        )
+                    )
 
             # Проверяем права — должно быть 600
             mode = oct(stat.st_mode & 0o777)
             if mode != "0o600":
-                findings.append(PersistenceFinding(
-                    category="ssh_key",
-                    severity="medium",
-                    path=str(auth_keys),
-                    detail=f"Insecure permissions: {mode} (expected 0o600)",
-                    user=username,
-                ))
+                findings.append(
+                    PersistenceFinding(
+                        category="ssh_key",
+                        severity="medium",
+                        path=str(auth_keys),
+                        detail=f"Insecure permissions: {mode} (expected 0o600)",
+                        user=username,
+                    )
+                )
         except Exception:
             pass
 
         return findings
 
-    def _scan_systemd_units(self, uid: int, username: str | None, deadline: float) -> list[PersistenceFinding]:
+    def _scan_systemd_units(
+        self, uid: int, username: str | None, deadline: float
+    ) -> list[PersistenceFinding]:
         """Сканирование systemd unit-файлов."""
         import time as _time
+
         findings: list[PersistenceFinding] = []
 
         # Пользовательские systemd сервисы
         if username:
             import pwd
+
             try:
                 home = Path(pwd.getpwuid(uid).pw_dir)
             except KeyError:
@@ -346,15 +383,23 @@ class PersistenceScanner:
                         if _time.monotonic() >= deadline:
                             break
                         try:
-                            text = unit_file.read_text(encoding="utf-8", errors="ignore")[:4096]
-                            severity = "critical" if _SUSPICIOUS_PATTERNS.search(text) else "high"
-                            findings.append(PersistenceFinding(
-                                category="systemd",
-                                severity=severity,
-                                path=str(unit_file),
-                                detail=text[:500],
-                                user=username,
-                            ))
+                            text = unit_file.read_text(
+                                encoding="utf-8", errors="ignore"
+                            )[:4096]
+                            severity = (
+                                "critical"
+                                if _SUSPICIOUS_PATTERNS.search(text)
+                                else "high"
+                            )
+                            findings.append(
+                                PersistenceFinding(
+                                    category="systemd",
+                                    severity=severity,
+                                    path=str(unit_file),
+                                    detail=text[:500],
+                                    user=username,
+                                )
+                            )
                         except Exception:
                             continue
 
@@ -368,26 +413,33 @@ class PersistenceScanner:
             for unit_file in p.glob("*.service"):
                 try:
                     if unit_file.stat().st_uid == uid and uid != 0:
-                        text = unit_file.read_text(encoding="utf-8", errors="ignore")[:4096]
-                        findings.append(PersistenceFinding(
-                            category="systemd",
-                            severity="critical",
-                            path=str(unit_file),
-                            detail=text[:500],
-                            user=username or str(uid),
-                        ))
+                        text = unit_file.read_text(encoding="utf-8", errors="ignore")[
+                            :4096
+                        ]
+                        findings.append(
+                            PersistenceFinding(
+                                category="systemd",
+                                severity="critical",
+                                path=str(unit_file),
+                                detail=text[:500],
+                                user=username or str(uid),
+                            )
+                        )
                 except Exception:
                     continue
 
         return findings
 
-    def _scan_shell_rc(self, uid: int, username: str | None, deadline: float) -> list[PersistenceFinding]:
+    def _scan_shell_rc(
+        self, uid: int, username: str | None, deadline: float
+    ) -> list[PersistenceFinding]:
         """Сканирование shell RC-файлов на подозрительные вставки."""
         findings: list[PersistenceFinding] = []
         if not username:
             return findings
 
         import pwd
+
         try:
             home = Path(pwd.getpwuid(uid).pw_dir)
         except KeyError:
@@ -403,19 +455,23 @@ class PersistenceScanner:
                     # Найти конкретные подозрительные строки
                     for i, line in enumerate(text.splitlines(), 1):
                         if _SUSPICIOUS_PATTERNS.search(line):
-                            findings.append(PersistenceFinding(
-                                category="shell_rc",
-                                severity="critical",
-                                path=f"{rc_path}:{i}",
-                                detail=line.strip()[:500],
-                                user=username,
-                            ))
+                            findings.append(
+                                PersistenceFinding(
+                                    category="shell_rc",
+                                    severity="critical",
+                                    path=f"{rc_path}:{i}",
+                                    detail=line.strip()[:500],
+                                    user=username,
+                                )
+                            )
             except Exception:
                 continue
 
         return findings
 
-    def _scan_at_jobs(self, uid: int, username: str | None, deadline: float) -> list[PersistenceFinding]:
+    def _scan_at_jobs(
+        self, uid: int, username: str | None, deadline: float
+    ) -> list[PersistenceFinding]:
         """Сканирование at-jobs."""
         findings: list[PersistenceFinding] = []
         if not username:
@@ -424,25 +480,32 @@ class PersistenceScanner:
         try:
             proc = subprocess.run(
                 ["atq"],
-                check=False, capture_output=True, text=True, timeout=5,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if proc.returncode == 0 and proc.stdout.strip():
                 for line in proc.stdout.strip().splitlines():
                     # atq формат: "1\t2026-03-13 10:00 a user"
                     if username in line:
-                        findings.append(PersistenceFinding(
-                            category="at_job",
-                            severity="high",
-                            path="atq",
-                            detail=line.strip()[:500],
-                            user=username,
-                        ))
+                        findings.append(
+                            PersistenceFinding(
+                                category="at_job",
+                                severity="high",
+                                path="atq",
+                                detail=line.strip()[:500],
+                                user=username,
+                            )
+                        )
         except Exception:
             pass
 
         return findings
 
-    def _scan_active_sessions(self, uid: int, username: str | None, deadline: float) -> list[PersistenceFinding]:
+    def _scan_active_sessions(
+        self, uid: int, username: str | None, deadline: float
+    ) -> list[PersistenceFinding]:
         """Сканирование активных сессий пользователя."""
         findings: list[PersistenceFinding] = []
         if not username:
@@ -452,24 +515,32 @@ class PersistenceScanner:
             # who показывает активные сессии
             proc = subprocess.run(
                 ["who"],
-                check=False, capture_output=True, text=True, timeout=5,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if proc.returncode == 0:
                 for line in proc.stdout.strip().splitlines():
-                    if line.startswith(username + " ") or line.startswith(username + "\t"):
-                        findings.append(PersistenceFinding(
-                            category="session",
-                            severity="high",
-                            path="active_session",
-                            detail=line.strip()[:500],
-                            user=username,
-                        ))
+                    if line.startswith(username + " ") or line.startswith(
+                        username + "\t"
+                    ):
+                        findings.append(
+                            PersistenceFinding(
+                                category="session",
+                                severity="high",
+                                path="active_session",
+                                detail=line.strip()[:500],
+                                user=username,
+                            )
+                        )
         except Exception:
             pass
 
         # Проверяем /proc на процессы этого UID
         try:
             import time as _time
+
             count = 0
             for pid_dir in Path("/proc").iterdir():
                 # NEW-M10 fix: проверяем deadline при обходе /proc
@@ -478,7 +549,9 @@ class PersistenceScanner:
                 if not pid_dir.name.isdigit():
                     continue
                 try:
-                    status = (pid_dir / "status").read_text(encoding="utf-8", errors="ignore")
+                    status = (pid_dir / "status").read_text(
+                        encoding="utf-8", errors="ignore"
+                    )
                     for sline in status.splitlines():
                         if sline.startswith("Uid:"):
                             parts = sline.split()
@@ -488,13 +561,15 @@ class PersistenceScanner:
                 except Exception:
                     continue
             if count > 0:
-                findings.append(PersistenceFinding(
-                    category="session",
-                    severity="medium",
-                    path="/proc",
-                    detail=f"Active processes owned by UID {uid}: {count}",
-                    user=username,
-                ))
+                findings.append(
+                    PersistenceFinding(
+                        category="session",
+                        severity="medium",
+                        path="/proc",
+                        detail=f"Active processes owned by UID {uid}: {count}",
+                        user=username,
+                    )
+                )
         except Exception:
             pass
 
@@ -503,7 +578,10 @@ class PersistenceScanner:
     # ---------- Нейтрализация ----------
 
     def _neutralize(
-        self, findings: list[PersistenceFinding], uid: int, username: str | None,
+        self,
+        findings: list[PersistenceFinding],
+        uid: int,
+        username: str | None,
     ) -> int:
         """
         Нейтрализация найденных механизмов закрепления.
@@ -520,7 +598,10 @@ class PersistenceScanner:
                     if username:
                         proc = subprocess.run(
                             ["crontab", "-r", "-u", username],
-                            check=False, capture_output=True, text=True, timeout=5,
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
                         )
                         if proc.returncode == 0:
                             finding.neutralized = True
@@ -550,24 +631,32 @@ class PersistenceScanner:
                             rc_path.write_text(new_text, encoding="utf-8")
                             finding.neutralized = True
                             finding.neutralize_detail = "Suspicious lines commented out"
-                            logger.info("Neutralized: commented suspicious lines in %s", rc_path)
+                            logger.info(
+                                "Neutralized: commented suspicious lines in %s", rc_path
+                            )
 
                 elif finding.category == "systemd" and Path(finding.path).is_file():
                     # Останавливаем и отключаем сервис
                     unit_name = Path(finding.path).name
                     subprocess.run(
                         ["systemctl", "stop", unit_name],
-                        check=False, capture_output=True, timeout=5,
+                        check=False,
+                        capture_output=True,
+                        timeout=5,
                     )
                     subprocess.run(
                         ["systemctl", "disable", unit_name],
-                        check=False, capture_output=True, timeout=5,
+                        check=False,
+                        capture_output=True,
+                        timeout=5,
                     )
                     src = Path(finding.path)
                     dst = src.with_suffix(src.suffix + ".phantom_disabled")
                     src.rename(dst)
                     finding.neutralized = True
-                    finding.neutralize_detail = f"Service stopped, disabled, renamed to {dst.name}"
+                    finding.neutralize_detail = (
+                        f"Service stopped, disabled, renamed to {dst.name}"
+                    )
                     logger.info("Neutralized: disabled systemd unit %s", unit_name)
 
                 elif finding.category == "at_job":
@@ -577,7 +666,10 @@ class PersistenceScanner:
                         job_id = parts[0]
                         proc = subprocess.run(
                             ["atrm", job_id],
-                            check=False, capture_output=True, text=True, timeout=5,
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
                         )
                         if proc.returncode == 0:
                             finding.neutralized = True
@@ -608,26 +700,40 @@ class PersistenceScanner:
             # Используем SIGTERM сначала
             subprocess.run(
                 ["pkill", "-TERM", "-u", username],
-                check=False, capture_output=True, timeout=5,
+                check=False,
+                capture_output=True,
+                timeout=5,
             )
             # Даём время на graceful shutdown
             import time as _time
+
             _time.sleep(1)
             # SIGKILL для оставшихся
             subprocess.run(
                 ["pkill", "-KILL", "-u", username],
-                check=False, capture_output=True, timeout=5,
+                check=False,
+                capture_output=True,
+                timeout=5,
             )
             # R3-M1 fix: проверяем остались ли процессы после kill
             try:
                 proc_check = subprocess.run(
                     ["pgrep", "-c", "-u", username],
-                    check=False, capture_output=True, text=True, timeout=5,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
-                remaining = int(proc_check.stdout.strip()) if proc_check.returncode == 0 else 0
+                remaining = (
+                    int(proc_check.stdout.strip()) if proc_check.returncode == 0 else 0
+                )
             except Exception:
                 remaining = -1  # неизвестно
-            logger.info("Killed sessions for user %s (remaining processes: %s)", username, remaining)
+            logger.info(
+                "Killed sessions for user %s (remaining processes: %s)",
+                username,
+                remaining,
+            )
             # R3-M1 fix: 1 = все убиты, 0 = остались процессы
             return 1 if remaining == 0 else 0
         except Exception as exc:

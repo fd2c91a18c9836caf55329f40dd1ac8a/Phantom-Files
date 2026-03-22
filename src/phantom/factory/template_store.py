@@ -35,13 +35,31 @@ _FORBIDDEN_PATTERNS = re.compile(
     r"getattr\s*\(",  # H8 fix: блокировка getattr() bypass
     re.IGNORECASE,
 )
-TEXT_EXTENSIONS = frozenset({".j2", ".txt", ".env", ".sql", ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg", ".conf", ".sh", ".py"})
+TEXT_EXTENSIONS = frozenset(
+    {
+        ".j2",
+        ".txt",
+        ".env",
+        ".sql",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".xml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".sh",
+        ".py",
+    }
+)
 BINARY_EXTENSIONS = frozenset({".docx", ".xlsx", ".pdf", ".pptx", ".zip"})
 
 
 @dataclass(frozen=True)
 class TemplateVersion:
     """Одна версия пользовательского шаблона."""
+
     name: str
     version: str
     path: str
@@ -50,6 +68,7 @@ class TemplateVersion:
 @dataclass(frozen=True)
 class TemplateInfo:
     """Подробная информация о шаблоне."""
+
     name: str
     versions: list[str]
     active_version: str | None
@@ -85,9 +104,15 @@ class TemplateStore:
         for template_dir in sorted(self.root.glob("*")):
             if not template_dir.is_dir():
                 continue
-            versions = sorted(self._version_files(template_dir), key=self._version_sort_key, reverse=True)
+            versions = sorted(
+                self._version_files(template_dir),
+                key=self._version_sort_key,
+                reverse=True,
+            )
             for p in versions:
-                result.append(TemplateVersion(name=template_dir.name, version=p.stem, path=str(p)))
+                result.append(
+                    TemplateVersion(name=template_dir.name, version=p.stem, path=str(p))
+                )
         return result
 
     def get_template_info(self, name: str) -> TemplateInfo:
@@ -98,7 +123,9 @@ class TemplateStore:
         if not template_dir.exists():
             raise FileNotFoundError(f"Template not found: {name}")
 
-        version_files = sorted(self._version_files(template_dir), key=self._version_sort_key, reverse=True)
+        version_files = sorted(
+            self._version_files(template_dir), key=self._version_sort_key, reverse=True
+        )
         versions = [f.stem for f in version_files]
         total_size = sum(f.stat().st_size for f in version_files)
         ext = version_files[0].suffix if version_files else ""
@@ -206,7 +233,9 @@ class TemplateStore:
                     target_name = os.readlink(str(active_link))
                     if Path(target_name).stem == version:
                         active_link.unlink()
-                        logger.info("Active symlink removed (deleted version was active)")
+                        logger.info(
+                            "Active symlink removed (deleted version was active)"
+                        )
                 except Exception as exc:
                     logger.debug("Failed to check active symlink: %s", exc)
             # Если не осталось версий — удаляем каталог
@@ -239,7 +268,9 @@ class TemplateStore:
             # Проверка на запрещённые конструкции
             match = _FORBIDDEN_PATTERNS.search(text)
             if match:
-                raise ValueError(f"Forbidden pattern detected in template: '{match.group()}'")
+                raise ValueError(
+                    f"Forbidden pattern detected in template: '{match.group()}'"
+                )
             # Jinja2 sandbox парсинг — проверяет синтаксис
             env = SandboxedEnvironment(undefined=StrictUndefined)
             env.parse(text)
@@ -261,14 +292,18 @@ class TemplateStore:
                     logger.warning("clamscan timeout for %s, process killed", src)
                     raise ValueError(f"Antivirus check timed out for {src}") from exc
                 if proc.returncode != 0:
-                    raise ValueError(f"Antivirus check failed: {proc.stdout or proc.stderr}")
+                    raise ValueError(
+                        f"Antivirus check failed: {proc.stdout or proc.stderr}"
+                    )
             return
 
         raise ValueError(f"Unsupported template extension: {suffix}")
 
     def _prune_old_versions(self, template_dir: Path) -> None:
         """Удаление самых старых версий, если их больше max_versions."""
-        files = sorted(self._version_files(template_dir), key=self._version_sort_key, reverse=True)
+        files = sorted(
+            self._version_files(template_dir), key=self._version_sort_key, reverse=True
+        )
         active_link = template_dir / "active"
         active_target: Path | None = None
         if active_link.is_symlink():
@@ -322,7 +357,11 @@ class TemplateStore:
         for template_dir in sorted(self.root.glob("*")):
             if not template_dir.is_dir():
                 continue
-            version_files = sorted(self._version_files(template_dir), key=self._version_sort_key, reverse=True)
+            version_files = sorted(
+                self._version_files(template_dir),
+                key=self._version_sort_key,
+                reverse=True,
+            )
             versions = [f.stem for f in version_files]
             active_link = template_dir / "active"
             active_version = None
@@ -331,12 +370,14 @@ class TemplateStore:
                     active_version = active_link.resolve().stem
                 except Exception:
                     pass
-            result.append({
-                "name": template_dir.name,
-                "versions": versions,
-                "active_version": active_version,
-                "extension": version_files[0].suffix if version_files else "",
-            })
+            result.append(
+                {
+                    "name": template_dir.name,
+                    "versions": versions,
+                    "active_version": active_version,
+                    "extension": version_files[0].suffix if version_files else "",
+                }
+            )
         return result
 
     def _version_files(self, template_dir: Path) -> list[Path]:

@@ -3,8 +3,19 @@
 from datetime import datetime, timezone
 
 from phantom.core.state import (
-    Context, Decision, Event, EventType, ProcessInfo, NetworkInfo, NetworkConnection, ResponseAction, ResponseResult,
-    RunMode, Severity, ThreatCategory, generate_incident_id,
+    Context,
+    Decision,
+    Event,
+    EventType,
+    ProcessInfo,
+    NetworkInfo,
+    NetworkConnection,
+    ResponseAction,
+    ResponseResult,
+    RunMode,
+    Severity,
+    ThreatCategory,
+    generate_incident_id,
 )
 
 
@@ -22,6 +33,7 @@ def _event(**kwargs) -> Event:
 
 
 # ---------- Event ----------
+
 
 def test_event_creation():
     e = _event()
@@ -62,6 +74,7 @@ def test_event_severity_ordering():
 
 # ---------- Context ----------
 
+
 def test_context_defaults():
     ctx = Context(event=_event(), threat_score=0.5)
     assert ctx.process is None
@@ -83,6 +96,7 @@ def test_context_to_dict():
 
 
 # ---------- Decision ----------
+
 
 def test_decision_from_context():
     ctx = Context(event=_event(), threat_score=1.0)
@@ -117,6 +131,7 @@ def test_decision_to_dict():
 
 # ---------- ResponseResult ----------
 
+
 def test_response_result():
     r = ResponseResult(
         decision_id="DEC-123",
@@ -141,6 +156,7 @@ def test_response_result_with_error():
 
 
 # ---------- Enum values ----------
+
 
 def test_event_types():
     assert EventType.FILE_OPEN.value == "file_open"
@@ -172,6 +188,7 @@ def test_threat_categories():
 
 # ---------- ProcessInfo ----------
 
+
 def test_process_info():
     p = ProcessInfo(pid=1234, ppid=1, name="bash")
     assert p.name == "bash"
@@ -179,6 +196,7 @@ def test_process_info():
 
 
 # ---------- NetworkInfo ----------
+
 
 def test_network_connection():
     conn = NetworkConnection(
@@ -192,12 +210,15 @@ def test_network_connection():
 
 
 def test_network_info():
-    conn = NetworkConnection(local_addr="0.0.0.0", local_port=80, remote_addr="1.2.3.4", remote_port=80)
+    conn = NetworkConnection(
+        local_addr="0.0.0.0", local_port=80, remote_addr="1.2.3.4", remote_port=80
+    )
     net = NetworkInfo(connections=(conn,))
     assert len(net.connections) == 1
 
 
 # ---------- Генерация ID ----------
+
 
 def test_generate_incident_id():
     id1 = generate_incident_id()

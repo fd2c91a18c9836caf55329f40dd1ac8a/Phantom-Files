@@ -47,7 +47,9 @@ class IncidentStore:
     Группирует всплески событий для одной ловушки и PID в единый инцидент.
     """
 
-    def __init__(self, dedup_window_seconds: float = 2.0, max_records: int = 10000) -> None:
+    def __init__(
+        self, dedup_window_seconds: float = 2.0, max_records: int = 10000
+    ) -> None:
         self.dedup_window = float(dedup_window_seconds)
         self._max_records = int(max_records)
         self._records: Dict[Tuple[str, Optional[int]], IncidentRecord] = {}

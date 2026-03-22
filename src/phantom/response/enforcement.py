@@ -48,14 +48,26 @@ class CommandResult:
 
 
 class ProcessEnforcer:
-    async def sigstop(self, pid: int, *, expected_start_time: Optional[int] = None) -> bool:
-        return await asyncio.to_thread(self._send_signal, pid, signal.SIGSTOP, expected_start_time)
+    async def sigstop(
+        self, pid: int, *, expected_start_time: Optional[int] = None
+    ) -> bool:
+        return await asyncio.to_thread(
+            self._send_signal, pid, signal.SIGSTOP, expected_start_time
+        )
 
-    async def sigkill(self, pid: int, *, expected_start_time: Optional[int] = None) -> bool:
-        return await asyncio.to_thread(self._send_signal, pid, signal.SIGKILL, expected_start_time)
+    async def sigkill(
+        self, pid: int, *, expected_start_time: Optional[int] = None
+    ) -> bool:
+        return await asyncio.to_thread(
+            self._send_signal, pid, signal.SIGKILL, expected_start_time
+        )
 
-    async def sigcont(self, pid: int, *, expected_start_time: Optional[int] = None) -> bool:
-        return await asyncio.to_thread(self._send_signal, pid, signal.SIGCONT, expected_start_time)
+    async def sigcont(
+        self, pid: int, *, expected_start_time: Optional[int] = None
+    ) -> bool:
+        return await asyncio.to_thread(
+            self._send_signal, pid, signal.SIGCONT, expected_start_time
+        )
 
     def _send_signal(
         self, pid: int, sig: signal.Signals, expected_start_time: Optional[int] = None
@@ -70,14 +82,19 @@ class ProcessEnforcer:
             current_start = _pid_starttime(pid)
             if current_start is None:
                 logger.warning(
-                    "PID %s vanished before signal %s (cannot read start_time)", pid, sig.name
+                    "PID %s vanished before signal %s (cannot read start_time)",
+                    pid,
+                    sig.name,
                 )
                 return False
             if current_start != expected_start_time:
                 logger.warning(
                     "PID reuse detected for PID %s: expected start_time=%s, got %s. "
                     "Signal %s NOT sent (wrong process).",
-                    pid, expected_start_time, current_start, sig.name,
+                    pid,
+                    expected_start_time,
+                    current_start,
+                    sig.name,
                 )
                 return False
         try:
@@ -111,7 +128,12 @@ class CgroupEbpfIsolator:
         self._bpffs_root = Path(bpffs_root) / "cgroup_drop"
         self._source_path = Path(
             source_path
-            or (Path(__file__).resolve().parent.parent / "sensors" / "ebpf" / "cgroup_drop.bpf.c")
+            or (
+                Path(__file__).resolve().parent.parent
+                / "sensors"
+                / "ebpf"
+                / "cgroup_drop.bpf.c"
+            )
         )
         self._lock = threading.Lock()
         self._loaded = False
@@ -148,7 +170,12 @@ class CgroupEbpfIsolator:
         try:
             target.mkdir(parents=True, exist_ok=True)
             self._write_pid(target, pid)
-            if ttl_seconds and ttl_seconds > 0 and origin_path is not None and start_time is not None:
+            if (
+                ttl_seconds
+                and ttl_seconds > 0
+                and origin_path is not None
+                and start_time is not None
+            ):
                 self._schedule_restore(pid, ttl_seconds, origin_path, start_time)
             return True
         except Exception as exc:
@@ -171,7 +198,9 @@ class CgroupEbpfIsolator:
             ]
             compile_res = self._run(compile_cmd, timeout=10)
             if not compile_res.ok:
-                raise RuntimeError(f"clang failed: {compile_res.stderr.strip() or compile_res.stdout.strip()}")
+                raise RuntimeError(
+                    f"clang failed: {compile_res.stderr.strip() or compile_res.stdout.strip()}"
+                )
 
             load_cmd = [
                 "bpftool",
@@ -184,7 +213,9 @@ class CgroupEbpfIsolator:
             ]
             load_res = self._run(load_cmd, timeout=10)
             if not load_res.ok:
-                raise RuntimeError(f"bpftool loadall failed: {load_res.stderr.strip() or load_res.stdout.strip()}")
+                raise RuntimeError(
+                    f"bpftool loadall failed: {load_res.stderr.strip() or load_res.stdout.strip()}"
+                )
 
         self._attach_prog(self._ingress_prog, "ingress")
         self._attach_prog(self._egress_prog, "egress")
@@ -205,14 +236,22 @@ class CgroupEbpfIsolator:
         output = f"{res.stdout}\n{res.stderr}".lower()
         if "file exists" in output or "already" in output:
             return
-        raise RuntimeError(f"bpftool cgroup attach {direction} failed: {res.stderr.strip() or res.stdout.strip()}")
+        raise RuntimeError(
+            f"bpftool cgroup attach {direction} failed: {res.stderr.strip() or res.stdout.strip()}"
+        )
 
-    def _schedule_restore(self, pid: int, ttl_seconds: int, origin_path: Path, start_time: int) -> None:
-        timer = threading.Timer(ttl_seconds, self._restore_pid, args=(pid, origin_path, start_time))
+    def _schedule_restore(
+        self, pid: int, ttl_seconds: int, origin_path: Path, start_time: int
+    ) -> None:
+        timer = threading.Timer(
+            ttl_seconds, self._restore_pid, args=(pid, origin_path, start_time)
+        )
         timer.daemon = True
         timer.start()
 
-    def _restore_pid(self, pid: int, origin_path: Path, expected_start_time: int) -> None:
+    def _restore_pid(
+        self, pid: int, origin_path: Path, expected_start_time: int
+    ) -> None:
         try:
             if not origin_path.exists():
                 return
@@ -236,7 +275,9 @@ class CgroupEbpfIsolator:
 
     def _read_origin_path(self, pid: int) -> Optional[Path]:
         try:
-            text = Path(f"/proc/{pid}/cgroup").read_text(encoding="utf-8", errors="ignore")
+            text = Path(f"/proc/{pid}/cgroup").read_text(
+                encoding="utf-8", errors="ignore"
+            )
         except Exception:
             return None
         rel = self._parse_unified_cgroup(text)
@@ -246,7 +287,9 @@ class CgroupEbpfIsolator:
 
     def _current_cgroup_path(self, pid: int) -> Optional[Path]:
         try:
-            text = Path(f"/proc/{pid}/cgroup").read_text(encoding="utf-8", errors="ignore")
+            text = Path(f"/proc/{pid}/cgroup").read_text(
+                encoding="utf-8", errors="ignore"
+            )
         except Exception:
             return None
         rel = self._parse_unified_cgroup(text)
@@ -314,31 +357,44 @@ class NetworkEnforcer:
             enforcement_cfg = cfg.get("enforcement", {})
             if not isinstance(enforcement_cfg, dict):
                 enforcement_cfg = {}
-            self._allow_uid_fallback = bool(enforcement_cfg.get("allow_uid_fallback", False))
+            self._allow_uid_fallback = bool(
+                enforcement_cfg.get("allow_uid_fallback", False)
+            )
         except Exception:
             self._allow_uid_fallback = False
         env_override = os.getenv("PHANTOM_ALLOW_UID_FALLBACK")
         if env_override is not None:
-            self._allow_uid_fallback = env_override.strip().lower() in {"1", "true", "yes", "on"}
+            self._allow_uid_fallback = env_override.strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
 
     async def initialize(self) -> None:
         await asyncio.to_thread(self._ensure_base)
         await asyncio.to_thread(self._init_ebpf)
 
-    async def block_ips(self, ips: Iterable[str], ttl_seconds: Optional[int] = None) -> bool:
+    async def block_ips(
+        self, ips: Iterable[str], ttl_seconds: Optional[int] = None
+    ) -> bool:
         ip_list = [ip for ip in ips if ip]
         if not ip_list:
             return True
         return await asyncio.to_thread(self._block_ips_sync, ip_list, ttl_seconds)
 
-    async def isolate_process(self, pid: int, ttl_seconds: Optional[int] = None) -> bool:
+    async def isolate_process(
+        self, pid: int, ttl_seconds: Optional[int] = None
+    ) -> bool:
         return await asyncio.to_thread(self._isolate_process_sync, pid, ttl_seconds)
 
     def _init_ebpf(self) -> None:
         try:
             self._ebpf_isolator.initialize()
         except Exception as exc:
-            logger.warning("cgroup eBPF isolation unavailable, fallback nft only: %s", exc)
+            logger.warning(
+                "cgroup eBPF isolation unavailable, fallback nft only: %s", exc
+            )
 
     def _ensure_base(self) -> None:
         if self._base_ready:
@@ -346,7 +402,9 @@ class NetworkEnforcer:
         with self._base_lock:
             if self._base_ready:
                 return
-            self._run_nft(["add", "table", self.family, self.table], tolerate_errors=True)
+            self._run_nft(
+                ["add", "table", self.family, self.table], tolerate_errors=True
+            )
             self._run_nft(
                 [
                     "add",
@@ -496,7 +554,14 @@ class NetworkEnforcer:
             else:
                 element = normalized_ip
             res = self._run_nft(
-                ["add", "element", self.family, self.table, set_name, "{ " + element + " }"],
+                [
+                    "add",
+                    "element",
+                    self.family,
+                    self.table,
+                    set_name,
+                    "{ " + element + " }",
+                ],
                 tolerate_errors=False,
             )
             if not res.ok:
@@ -511,7 +576,9 @@ class NetworkEnforcer:
         if ebpf_ok:
             return True
         if not self._allow_uid_fallback:
-            logger.error("UID-level fallback disabled; isolation skipped for PID %s", pid)
+            logger.error(
+                "UID-level fallback disabled; isolation skipped for PID %s", pid
+            )
             return False
         uid = self._pid_uid(pid)
         if uid is None:
@@ -524,13 +591,22 @@ class NetworkEnforcer:
         else:
             element = str(int(uid))
         res = self._run_nft(
-            ["add", "element", self.family, self.table, self.uid_set, "{ " + element + " }"],
+            [
+                "add",
+                "element",
+                self.family,
+                self.table,
+                self.uid_set,
+                "{ " + element + " }",
+            ],
             tolerate_errors=False,
         )
         if not res.ok:
             if "file exists" in (res.stderr or "").lower():
                 return True
-            logger.error("Failed to isolate PID %s via UID %s: %s", pid, uid, res.stderr.strip())
+            logger.error(
+                "Failed to isolate PID %s via UID %s: %s", pid, uid, res.stderr.strip()
+            )
             return False
         return True
 
@@ -580,4 +656,6 @@ class NetworkEnforcer:
         ok = proc.returncode == 0
         if not ok and not tolerate_errors:
             logger.debug("nft command failed: %s", " ".join(cmd))
-        return CommandResult(ok=ok, stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode)
+        return CommandResult(
+            ok=ok, stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode
+        )

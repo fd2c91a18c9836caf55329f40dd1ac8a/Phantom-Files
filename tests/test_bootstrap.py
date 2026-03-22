@@ -6,7 +6,12 @@ import pwd
 
 import pytest
 
-from phantom.core.bootstrap import BootstrapError, _iter_bootstrap_dirs, bootstrap, ensure_dir
+from phantom.core.bootstrap import (
+    BootstrapError,
+    _iter_bootstrap_dirs,
+    bootstrap,
+    ensure_dir,
+)
 
 
 def test_ensure_dir_rejects_symlink(tmp_path):

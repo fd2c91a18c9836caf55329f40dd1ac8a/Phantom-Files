@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass
-from typing import Awaitable, Callable
+from typing import Any, Callable, Coroutine
 
 from phantom.core.state import Event
 
-EventCallback = Callable[[Event], Awaitable[None]]
-PermissionCallback = Callable[[Event], Awaitable[bool]]
+EventCallback = Callable[[Event], Coroutine[Any, Any, None]]
+PermissionCallback = Callable[[Event], Coroutine[Any, Any, bool]]
 
 
 @dataclass(frozen=True)

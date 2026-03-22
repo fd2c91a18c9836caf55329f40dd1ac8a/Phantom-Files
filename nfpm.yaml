@@ -21,7 +21,7 @@ recommends:
 
 contents:
   # Исходный код
-  - src: src/phantom/**
+  - src: src/phantom
     dst: /opt/phantom/src/phantom/
     type: tree
 
@@ -59,7 +59,7 @@ contents:
       group: phantom-user
 
   # Шаблоны
-  - src: resources/templates/**
+  - src: resources/templates
     dst: /opt/phantom/resources/templates/
     type: tree
 

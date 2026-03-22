@@ -39,10 +39,14 @@ class ProcessCollector:
                 self._collect_env = bool(proc_cfg.get("collect_env", False))
                 allowlist = proc_cfg.get("env_allowlist", [])
                 if isinstance(allowlist, (list, tuple, set)):
-                    self._env_allowlist = {str(k).upper() for k in allowlist if str(k).strip()}
+                    self._env_allowlist = {
+                        str(k).upper() for k in allowlist if str(k).strip()
+                    }
                 denylist = proc_cfg.get("env_denylist")
                 if isinstance(denylist, (list, tuple, set)):
-                    joined = "|".join(re.escape(str(k)) for k in denylist if str(k).strip())
+                    joined = "|".join(
+                        re.escape(str(k)) for k in denylist if str(k).strip()
+                    )
                     if joined:
                         self._env_deny_re = re.compile(joined, re.IGNORECASE)
                 max_entries = proc_cfg.get("max_env_entries")
@@ -54,6 +58,7 @@ class ProcessCollector:
         except Exception:
             # Fail-safe: do not collect env on errors.
             self._collect_env = False
+
     async def collect(self, pid: int) -> Optional[ProcessInfo]:
         return await asyncio.to_thread(self._collect_sync, pid)
 

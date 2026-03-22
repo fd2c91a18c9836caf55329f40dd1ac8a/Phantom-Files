@@ -95,7 +95,9 @@ class ManifestLoader:
             logger.warning("Skipping trap %s: unsupported format '%s'", trap_id, fmt)
             return None
         if output.startswith("/"):
-            logger.warning("Skipping trap %s: output must be relative to traps_dir", trap_id)
+            logger.warning(
+                "Skipping trap %s: output must be relative to traps_dir", trap_id
+            )
             return None
         if ".." in Path(output).parts:
             logger.warning("Skipping trap %s: output path traversal blocked", trap_id)
@@ -112,4 +114,3 @@ class ManifestLoader:
             fmt=fmt,
             priority=priority,
         )
-

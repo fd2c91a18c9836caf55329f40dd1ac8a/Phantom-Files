@@ -30,7 +30,9 @@ class Dispatcher:
         self._network = NetworkEnforcer()
         self._exporter = AlertExporter()
         self._persistence = PersistenceScanner()
-        self._handlers: Dict[ResponseAction, Callable[[Decision], Awaitable[ResponseResult]]] = {
+        self._handlers: Dict[
+            ResponseAction, Callable[[Decision], Awaitable[ResponseResult]]
+        ] = {
             ResponseAction.LOG_ONLY: self._log_only,
             ResponseAction.ALERT: self._alert,
             ResponseAction.COLLECT_FORENSICS: self._collect_forensics,
@@ -77,7 +79,10 @@ class Dispatcher:
             if action == ResponseAction.KILL_PROCESS:
                 kill_executed = True
 
-            if decision.mode == RunMode.ACTIVE and (time.monotonic() - started) >= act_timeout:
+            if (
+                decision.mode == RunMode.ACTIVE
+                and (time.monotonic() - started) >= act_timeout
+            ):
                 logger.error("Act SLA exceeded (%.1fs), forcing SIGKILL", act_timeout)
                 if not kill_executed:
                     force_result = await self._kill_process(decision)
@@ -85,19 +90,24 @@ class Dispatcher:
                 break
 
     # NEW-H5 fix: набор действий, блокируемых в неактивных режимах
-    _BLOCKED_IN_PASSIVE = frozenset({
-        ResponseAction.ISOLATE_PROCESS,
-        ResponseAction.BLOCK_NETWORK,
-        ResponseAction.BLOCK_IP,
-        ResponseAction.KILL_PROCESS,
-        ResponseAction.QUARANTINE_FILE,
-        ResponseAction.SCAN_PERSISTENCE,
-        ResponseAction.KILL_USER_SESSIONS,
-    })
+    _BLOCKED_IN_PASSIVE = frozenset(
+        {
+            ResponseAction.ISOLATE_PROCESS,
+            ResponseAction.BLOCK_NETWORK,
+            ResponseAction.BLOCK_IP,
+            ResponseAction.KILL_PROCESS,
+            ResponseAction.QUARANTINE_FILE,
+            ResponseAction.SCAN_PERSISTENCE,
+            ResponseAction.KILL_USER_SESSIONS,
+        }
+    )
 
     def _action_blocked_by_mode(self, action: ResponseAction, mode: RunMode) -> bool:
         # NEW-H5 fix: объединены DRY_RUN и OBSERVATION в один блок
-        if mode in {RunMode.DRY_RUN, RunMode.OBSERVATION} and action in self._BLOCKED_IN_PASSIVE:
+        if (
+            mode in {RunMode.DRY_RUN, RunMode.OBSERVATION}
+            and action in self._BLOCKED_IN_PASSIVE
+        ):
             return True
         return False
 
@@ -307,7 +317,9 @@ class Dispatcher:
             # NEW-H3 fix: quarantine_dir из конфига
             cfg = get_config()
             paths = cfg.get("paths", {})
-            quarantine_path = str(paths.get("quarantine_dir", "/var/lib/phantom/quarantine"))
+            quarantine_path = str(
+                paths.get("quarantine_dir", "/var/lib/phantom/quarantine")
+            )
             quarantine_dir = Path(quarantine_path)
             quarantine_dir.mkdir(parents=True, exist_ok=True)
             dst = quarantine_dir / f"{src.name}.{decision.decision_id[:8]}"
@@ -374,7 +386,9 @@ class Dispatcher:
             )
 
     async def _kill_user_sessions(self, decision: Decision) -> ResponseResult:
-        if self._action_blocked_by_mode(ResponseAction.KILL_USER_SESSIONS, decision.mode):
+        if self._action_blocked_by_mode(
+            ResponseAction.KILL_USER_SESSIONS, decision.mode
+        ):
             return ResponseResult(
                 decision_id=decision.decision_id,
                 action=ResponseAction.KILL_USER_SESSIONS,
@@ -415,7 +429,12 @@ class Dispatcher:
         if not network:
             return ips
         for conn in network.connections:
-            if conn.remote_addr and conn.remote_addr not in {"127.0.0.1", "::1", "0.0.0.0"}:
+            # Bandit false positive: filtering wildcard remote addresses, not binding a socket.
+            if conn.remote_addr and conn.remote_addr not in {
+                "127.0.0.1",
+                "::1",
+                "0.0.0.0",  # nosec B104
+            }:
                 # NEW-H8 fix: валидация IP через ipaddress
                 try:
                     ipaddress.ip_address(conn.remote_addr)

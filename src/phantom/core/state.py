@@ -13,7 +13,6 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Union
 
-
 JSONPrimitive = Union[str, int, float, bool, None]
 JSONValue = Union[JSONPrimitive, Dict[str, Any], list]
 JSONDict = Dict[str, JSONValue]
@@ -232,10 +231,14 @@ class Context:
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.threat_score <= 1.0:
-            raise ValueError(f"threat_score must be between 0.0 and 1.0, got {self.threat_score}")
+            raise ValueError(
+                f"threat_score must be between 0.0 and 1.0, got {self.threat_score}"
+            )
         if self.event_count < 1:
             raise ValueError("event_count must be >= 1")
-        object.__setattr__(self, "enrichment_data", _freeze_dict(dict(self.enrichment_data)))
+        object.__setattr__(
+            self, "enrichment_data", _freeze_dict(dict(self.enrichment_data))
+        )
 
     @property
     def severity(self) -> Severity:
@@ -284,7 +287,9 @@ class Decision:
     def __post_init__(self) -> None:
         if not 0 <= self.priority <= 5:
             raise ValueError(f"priority must be 0-5, got {self.priority}")
-        object.__setattr__(self, "action_params", _freeze_dict(dict(self.action_params)))
+        object.__setattr__(
+            self, "action_params", _freeze_dict(dict(self.action_params))
+        )
 
     @classmethod
     def from_context(
@@ -373,4 +378,3 @@ def create_file_access_event(
 def generate_incident_id() -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"INC-{ts}-{uuid.uuid4().hex[:8]}"
-

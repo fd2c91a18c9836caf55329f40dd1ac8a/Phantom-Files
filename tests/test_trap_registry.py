@@ -8,15 +8,26 @@ import pytest
 from phantom.core.traps import TrapEntry, TrapRegistry
 
 
-def _entry(trap_id="t1", output="a/b.txt", category="credential",
-           priority="critical", template="text/t.j2", fmt="text") -> TrapEntry:
+def _entry(
+    trap_id="t1",
+    output="a/b.txt",
+    category="credential",
+    priority="critical",
+    template="text/t.j2",
+    fmt="text",
+) -> TrapEntry:
     return TrapEntry(
-        trap_id=trap_id, output_path=output, category=category,
-        priority=priority, template=template, fmt=fmt,
+        trap_id=trap_id,
+        output_path=output,
+        category=category,
+        priority=priority,
+        template=template,
+        fmt=fmt,
     )
 
 
 # ---------- register / lookup ----------
+
 
 def test_registry_lookup(tmp_path: Path) -> None:
     traps_root = tmp_path / "traps"
@@ -61,6 +72,7 @@ def test_register_overwrites(tmp_path: Path) -> None:
 
 # ---------- normalize ----------
 
+
 def test_normalize_relative_path(tmp_path: Path) -> None:
     reg = TrapRegistry(str(tmp_path))
     result = reg.normalize("sub/file.txt")
@@ -87,6 +99,7 @@ def test_lookup_path_traversal_returns_none(tmp_path: Path) -> None:
 
 
 # ---------- export / import JSON ----------
+
 
 def test_export_import_roundtrip(tmp_path: Path) -> None:
     traps_root = tmp_path / "traps"
@@ -138,6 +151,7 @@ def test_reload_from_json(tmp_path: Path) -> None:
 
 # ---------- from_entries ----------
 
+
 def test_from_entries(tmp_path: Path) -> None:
     entries = [
         _entry(trap_id="a", output="x.txt"),
@@ -148,6 +162,7 @@ def test_from_entries(tmp_path: Path) -> None:
 
 
 # ---------- TrapEntry ----------
+
 
 def test_entry_to_dict() -> None:
     e = _entry()
@@ -164,6 +179,7 @@ def test_entry_frozen() -> None:
 
 
 # ---------- root property ----------
+
 
 def test_root_property(tmp_path: Path) -> None:
     reg = TrapRegistry(str(tmp_path))

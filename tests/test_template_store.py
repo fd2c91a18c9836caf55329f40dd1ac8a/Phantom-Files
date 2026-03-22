@@ -13,13 +13,16 @@ def _make_store(tmp_path: Path) -> TemplateStore:
     return TemplateStore(str(root))
 
 
-def _write_j2(tmp_path: Path, name: str = "my.j2", content: str = "Hello {{ name }}") -> Path:
+def _write_j2(
+    tmp_path: Path, name: str = "my.j2", content: str = "Hello {{ name }}"
+) -> Path:
     p = tmp_path / name
     p.write_text(content, encoding="utf-8")
     return p
 
 
 # ---------- add / list ----------
+
 
 def test_add_and_list(tmp_path):
     store = _make_store(tmp_path)
@@ -64,6 +67,7 @@ def test_add_prunes_old_versions(tmp_path):
 
 # ---------- activate ----------
 
+
 def test_activate(tmp_path):
     store = _make_store(tmp_path)
     src = _write_j2(tmp_path)
@@ -85,6 +89,7 @@ def test_activate_nonexistent_raises(tmp_path):
 
 
 # ---------- show (get_template_info) ----------
+
 
 def test_get_template_info(tmp_path):
     store = _make_store(tmp_path)
@@ -110,6 +115,7 @@ def test_get_template_info_nonexistent(tmp_path):
 
 
 # ---------- remove ----------
+
 
 def test_remove_specific_version(tmp_path):
     store = _make_store(tmp_path)
@@ -171,6 +177,7 @@ def test_remove_nonexistent_raises(tmp_path):
 
 # ---------- validation ----------
 
+
 def test_add_rejects_forbidden_pattern(tmp_path):
     store = _make_store(tmp_path)
     bad = _write_j2(tmp_path, "evil.j2", "{{ __import__('os').system('rm -rf /') }}")
@@ -216,6 +223,7 @@ def test_add_rejects_too_large(tmp_path):
 
 
 # ---------- to_dict_list (API сериализация) ----------
+
 
 def test_to_dict_list(tmp_path):
     store = _make_store(tmp_path)

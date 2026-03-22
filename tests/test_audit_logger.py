@@ -5,7 +5,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from phantom.core.state import (
-    Context, Decision, Event, EventType, ResponseAction, ResponseResult, Severity,
+    Context,
+    Decision,
+    Event,
+    EventType,
+    ResponseAction,
+    ResponseResult,
+    Severity,
 )
 from phantom.logging.audit import AuditLogger
 
@@ -46,6 +52,7 @@ def _result(**kwargs) -> ResponseResult:
 
 
 # ---------- AuditLogger ----------
+
 
 def test_audit_logger_creates_file(tmp_path: Path):
     with patch("phantom.logging.audit.get_path", return_value=str(tmp_path)):

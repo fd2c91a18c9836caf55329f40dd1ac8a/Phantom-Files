@@ -126,7 +126,8 @@ class EbpfSensor(Sensor):
             (Path(__file__).resolve().parent / "ebpf" / "fs_sensor.bpf.c")
         )
         self._whitelist_process_names = {
-            str(x).strip().lower() for x in sensors_cfg.get("whitelist_process_names", [])
+            str(x).strip().lower()
+            for x in sensors_cfg.get("whitelist_process_names", [])
         }
         self._whitelist_uids: set[int] = set()
         # UID самого демона всегда в whitelist
@@ -166,7 +167,12 @@ class EbpfSensor(Sensor):
             return {}
         try:
             stat_map = self._bpf["ph_stats"]
-            labels = ["events_submitted", "accesses_blocked", "trap_hits", "trap_misses"]
+            labels = [
+                "events_submitted",
+                "accesses_blocked",
+                "trap_hits",
+                "trap_misses",
+            ]
             result = {}
             for i, label in enumerate(labels):
                 total = 0
@@ -195,7 +201,9 @@ class EbpfSensor(Sensor):
         src_text = source.read_text(encoding="utf-8")
         if not lsm_ok:
             # Деградированный режим: вырезаем LSM_PROBE из исходника
-            logger.warning("BPF LSM unavailable: %s. Falling back to tracepoints only.", lsm_reason)
+            logger.warning(
+                "BPF LSM unavailable: %s. Falling back to tracepoints only.", lsm_reason
+            )
             src_text = self._strip_lsm_probe(src_text)
 
         try:
@@ -233,7 +241,9 @@ class EbpfSensor(Sensor):
         else:
             self._reason = ""
 
-        mode_label = "LSM+tracepoints" if self._lsm_active else "tracepoints-only (degraded)"
+        mode_label = (
+            "LSM+tracepoints" if self._lsm_active else "tracepoints-only (degraded)"
+        )
         logger.info(
             "eBPF sensor started: mode=%s, traps=%d, block=%s",
             mode_label,
@@ -309,7 +319,11 @@ class EbpfSensor(Sensor):
                 del dev_map[key]
 
         loaded = len(new_trap_entries)
-        logger.info("Loaded %d/%d trap inodes into BPF map", loaded, len(self._registry.entries()))
+        logger.info(
+            "Loaded %d/%d trap inodes into BPF map",
+            loaded,
+            len(self._registry.entries()),
+        )
 
     def _populate_whitelist_map(self) -> None:
         """Заполнение ph_whitelist из конфигурации."""
@@ -375,7 +389,9 @@ class EbpfSensor(Sensor):
             flags = int(getattr(raw, "flags", 0))
             inode = int(getattr(raw, "inode", 0))
             dev = int(getattr(raw, "dev", 0))
-            raw_path = bytes(raw.path).split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+            raw_path = (
+                bytes(raw.path).split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+            )
             path = self._resolve_event_path(raw_path, pid=pid, fd=fd)
             if not path:
                 return
@@ -384,7 +400,9 @@ class EbpfSensor(Sensor):
             if trap is None:
                 return
 
-            proc_name = bytes(raw.comm).split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+            proc_name = (
+                bytes(raw.comm).split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+            )
             uid = int(getattr(raw, "uid", 0))
             event_type = _EVENT_MAP.get(int(raw.event_type), EventType.FILE_ACCESS)
 

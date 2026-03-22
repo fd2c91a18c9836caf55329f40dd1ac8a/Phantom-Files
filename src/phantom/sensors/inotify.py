@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -60,7 +61,7 @@ class _WatchdogHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = str(Path(event.src_path).resolve())
+        path = str(Path(os.fsdecode(event.src_path)).resolve())
         if path_match(path, self._ignore_paths):
             return
 
@@ -135,7 +136,9 @@ class InotifySensor(Sensor):
             try:
                 self._loop = asyncio.get_running_loop()
             except RuntimeError as exc:
-                raise RuntimeError("InotifySensor requires a running event loop") from exc
+                raise RuntimeError(
+                    "InotifySensor requires a running event loop"
+                ) from exc
         if platform.system().lower() != "linux":
             raise RuntimeError("InotifySensor is supported only on Linux")
         self._observer = Observer()
@@ -146,11 +149,16 @@ class InotifySensor(Sensor):
         sensors_cfg = config.get("sensors", {}) if hasattr(config, "get") else {}
         self._ignore_paths = list(sensors_cfg.get("ignore_paths", []))
         self._whitelist_process_names = {
-            str(name).strip().lower() for name in sensors_cfg.get("whitelist_process_names", [])
+            str(name).strip().lower()
+            for name in sensors_cfg.get("whitelist_process_names", [])
         }
         self._resolve_pid = bool(sensors_cfg.get("inotify_pid_lookup", True))
-        self._pid_lookup_timeout = float(sensors_cfg.get("inotify_pid_lookup_timeout", 0.3))
-        self._pid_lookup_min_interval = float(sensors_cfg.get("inotify_pid_lookup_min_interval", 0.2))
+        self._pid_lookup_timeout = float(
+            sensors_cfg.get("inotify_pid_lookup_timeout", 0.3)
+        )
+        self._pid_lookup_min_interval = float(
+            sensors_cfg.get("inotify_pid_lookup_min_interval", 0.2)
+        )
 
     def start(self) -> None:
         traps_root = Path(self._registry.root)

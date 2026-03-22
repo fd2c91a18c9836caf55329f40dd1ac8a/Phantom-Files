@@ -42,7 +42,7 @@ def _parse_kernel_version(version: str) -> tuple[int, int, int]:
         parts.append(int(digits))
     while len(parts) < 3:
         parts.append(0)
-    return tuple(parts[:3])
+    return (parts[0], parts[1], parts[2])
 
 
 def _file_mode(path: Path) -> str:
@@ -67,16 +67,22 @@ def _check_os_kernel(results: list[CheckResult]) -> None:
     system = platform.system()
     release = platform.release()
     if system != "Linux":
-        results.append(CheckResult("os", "fail", f"Expected Linux, got {system} {release}"))
+        results.append(
+            CheckResult("os", "fail", f"Expected Linux, got {system} {release}")
+        )
         return
     ver = _parse_kernel_version(release)
     if ver < (5, 10, 0):
-        results.append(CheckResult("kernel", "fail", f"Kernel must be >= 5.10, got {release}"))
+        results.append(
+            CheckResult("kernel", "fail", f"Kernel must be >= 5.10, got {release}")
+        )
         return
     results.append(CheckResult("os", "pass", f"Linux {release}"))
 
 
-def _check_commands(results: list[CheckResult], cfg: dict[str, Any] | None = None) -> None:
+def _check_commands(
+    results: list[CheckResult], cfg: dict[str, Any] | None = None
+) -> None:
     cmds = list(REQUIRED_CMDS)
     # Команды eBPF требуются только при sensors.ebpf_enabled: true
     ebpf_enabled = False
@@ -88,9 +94,13 @@ def _check_commands(results: list[CheckResult], cfg: dict[str, Any] | None = Non
         cmds.extend(EBPF_CMDS)
     missing = [cmd for cmd in cmds if shutil.which(cmd) is None]
     if missing:
-        results.append(CheckResult("commands", "fail", f"Missing commands: {', '.join(missing)}"))
+        results.append(
+            CheckResult("commands", "fail", f"Missing commands: {', '.join(missing)}")
+        )
     else:
-        results.append(CheckResult("commands", "pass", "All required commands are present"))
+        results.append(
+            CheckResult("commands", "pass", "All required commands are present")
+        )
 
 
 def _check_cgroup_bpffs(results: list[CheckResult]) -> None:
@@ -100,7 +110,11 @@ def _check_cgroup_bpffs(results: list[CheckResult]) -> None:
         return
     controllers_file = cgroup_root / "cgroup.controllers"
     if not controllers_file.exists():
-        results.append(CheckResult("cgroup", "fail", "cgroup v2 is required (missing cgroup.controllers)"))
+        results.append(
+            CheckResult(
+                "cgroup", "fail", "cgroup v2 is required (missing cgroup.controllers)"
+            )
+        )
     else:
         results.append(CheckResult("cgroup", "pass", "cgroup v2 detected"))
 
@@ -108,7 +122,11 @@ def _check_cgroup_bpffs(results: list[CheckResult]) -> None:
     if bpffs.exists():
         results.append(CheckResult("bpffs", "pass", "/sys/fs/bpf present"))
     else:
-        results.append(CheckResult("bpffs", "warn", "/sys/fs/bpf missing (mount bpffs for eBPF pinning)"))
+        results.append(
+            CheckResult(
+                "bpffs", "warn", "/sys/fs/bpf missing (mount bpffs for eBPF pinning)"
+            )
+        )
 
 
 def _check_users_groups(results: list[CheckResult]) -> None:
@@ -124,7 +142,9 @@ def _check_users_groups(results: list[CheckResult]) -> None:
         if rc != 0:
             missing.append(group)
     if missing:
-        results.append(CheckResult("groups", "fail", f"Missing groups: {', '.join(missing)}"))
+        results.append(
+            CheckResult("groups", "fail", f"Missing groups: {', '.join(missing)}")
+        )
     else:
         results.append(CheckResult("groups", "pass", "Required groups present"))
 
@@ -132,11 +152,28 @@ def _check_users_groups(results: list[CheckResult]) -> None:
 def _check_python(results: list[CheckResult]) -> None:
     py_ver = sys.version_info
     if (py_ver.major, py_ver.minor) < (3, 10):
-        results.append(CheckResult("python", "fail", f"Python >= 3.10 required, got {platform.python_version()}"))
+        results.append(
+            CheckResult(
+                "python",
+                "fail",
+                f"Python >= 3.10 required, got {platform.python_version()}",
+            )
+        )
     else:
-        results.append(CheckResult("python", "pass", f"Python {platform.python_version()}"))
+        results.append(
+            CheckResult("python", "pass", f"Python {platform.python_version()}")
+        )
 
-    modules = ("bcc", "watchdog", "psutil", "yaml", "jinja2", "faker", "cryptography", "boto3")
+    modules = (
+        "bcc",
+        "watchdog",
+        "psutil",
+        "yaml",
+        "jinja2",
+        "faker",
+        "cryptography",
+        "boto3",
+    )
     missing = []
     for mod in modules:
         try:
@@ -144,14 +181,24 @@ def _check_python(results: list[CheckResult]) -> None:
         except Exception:
             missing.append(mod)
     if missing:
-        results.append(CheckResult("python_modules", "fail", f"Missing modules: {', '.join(missing)}"))
+        results.append(
+            CheckResult(
+                "python_modules", "fail", f"Missing modules: {', '.join(missing)}"
+            )
+        )
     else:
-        results.append(CheckResult("python_modules", "pass", "Required Python modules available"))
+        results.append(
+            CheckResult("python_modules", "pass", "Required Python modules available")
+        )
 
 
 def _check_service_file(results: list[CheckResult], service_path: Path) -> None:
     if not service_path.exists():
-        results.append(CheckResult("service_file", "fail", f"Service file not found: {service_path}"))
+        results.append(
+            CheckResult(
+                "service_file", "fail", f"Service file not found: {service_path}"
+            )
+        )
         return
     text = service_path.read_text(encoding="utf-8", errors="ignore")
     cap_line = None
@@ -160,19 +207,33 @@ def _check_service_file(results: list[CheckResult], service_path: Path) -> None:
             cap_line = line.split("=", 1)[1].strip()
             break
     if cap_line is None:
-        results.append(CheckResult("service_caps", "fail", "CapabilityBoundingSet missing in service file"))
+        results.append(
+            CheckResult(
+                "service_caps", "fail", "CapabilityBoundingSet missing in service file"
+            )
+        )
     else:
         caps = {token.strip() for token in cap_line.split() if token.strip()}
         missing_caps = sorted(REQUIRED_CAPS - caps)
         if missing_caps:
-            results.append(CheckResult("service_caps", "fail", f"Missing capabilities: {', '.join(missing_caps)}"))
+            results.append(
+                CheckResult(
+                    "service_caps",
+                    "fail",
+                    f"Missing capabilities: {', '.join(missing_caps)}",
+                )
+            )
         else:
-            results.append(CheckResult("service_caps", "pass", "Required capabilities declared"))
+            results.append(
+                CheckResult("service_caps", "pass", "Required capabilities declared")
+            )
 
 
 def _check_config(results: list[CheckResult], config_path: Path) -> dict[str, Any]:
     if not config_path.exists():
-        results.append(CheckResult("config", "fail", f"Config not found: {config_path}"))
+        results.append(
+            CheckResult("config", "fail", f"Config not found: {config_path}")
+        )
         return {}
     try:
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -185,9 +246,15 @@ def _check_config(results: list[CheckResult], config_path: Path) -> dict[str, An
     required_sections = ("paths", "sensors", "orchestrator", "forensics", "api")
     missing = [name for name in required_sections if name not in cfg]
     if missing:
-        results.append(CheckResult("config_sections", "fail", f"Missing sections: {', '.join(missing)}"))
+        results.append(
+            CheckResult(
+                "config_sections", "fail", f"Missing sections: {', '.join(missing)}"
+            )
+        )
     else:
-        results.append(CheckResult("config_sections", "pass", "Required sections found"))
+        results.append(
+            CheckResult("config_sections", "pass", "Required sections found")
+        )
     return cfg
 
 
@@ -199,15 +266,21 @@ def _check_paths_from_config(results: list[CheckResult], cfg: dict[str, Any]) ->
     for key in critical:
         value = paths.get(key)
         if not isinstance(value, str) or not value.strip():
-            results.append(CheckResult(f"path:{key}", "fail", "Missing or invalid path"))
+            results.append(
+                CheckResult(f"path:{key}", "fail", "Missing or invalid path")
+            )
             continue
         p = Path(value)
         if p.exists():
             writable = os.access(p, os.W_OK)
             status = "pass" if writable else "warn"
-            results.append(CheckResult(f"path:{key}", status, f"{p} exists (writable={writable})"))
+            results.append(
+                CheckResult(f"path:{key}", status, f"{p} exists (writable={writable})")
+            )
         else:
-            results.append(CheckResult(f"path:{key}", "warn", f"{p} does not exist yet"))
+            results.append(
+                CheckResult(f"path:{key}", "warn", f"{p} does not exist yet")
+            )
 
 
 def _check_secrets(results: list[CheckResult], cfg: dict[str, Any]) -> None:
@@ -215,11 +288,21 @@ def _check_secrets(results: list[CheckResult], cfg: dict[str, Any]) -> None:
     if secrets_file.exists():
         mode = _file_mode(secrets_file)
         if mode == "0o400":
-            results.append(CheckResult("secrets_env_perm", "pass", f"{secrets_file} mode={mode}"))
+            results.append(
+                CheckResult("secrets_env_perm", "pass", f"{secrets_file} mode={mode}")
+            )
         else:
-            results.append(CheckResult("secrets_env_perm", "warn", f"{secrets_file} mode={mode}, expected 0o400"))
+            results.append(
+                CheckResult(
+                    "secrets_env_perm",
+                    "warn",
+                    f"{secrets_file} mode={mode}, expected 0o400",
+                )
+            )
     else:
-        results.append(CheckResult("secrets_env_perm", "warn", f"{secrets_file} not found"))
+        results.append(
+            CheckResult("secrets_env_perm", "warn", f"{secrets_file} not found")
+        )
 
     signing = cfg.get("signing", {})
     if isinstance(signing, dict):
@@ -229,9 +312,15 @@ def _check_secrets(results: list[CheckResult], cfg: dict[str, Any]) -> None:
             if p.exists():
                 mode = _file_mode(p)
                 status = "pass" if mode in {"0o400", "0o600"} else "warn"
-                results.append(CheckResult("signing_key_perm", status, f"{p} mode={mode}"))
+                results.append(
+                    CheckResult("signing_key_perm", status, f"{p} mode={mode}")
+                )
             else:
-                results.append(CheckResult("signing_key_perm", "warn", f"Signing key not found: {p}"))
+                results.append(
+                    CheckResult(
+                        "signing_key_perm", "warn", f"Signing key not found: {p}"
+                    )
+                )
 
 
 def _summary(results: list[CheckResult]) -> dict[str, int]:
@@ -241,7 +330,9 @@ def _summary(results: list[CheckResult]) -> dict[str, int]:
     return counters
 
 
-def run_prod_readiness_check(*, config_path: str, service_path: str, json_output: bool) -> int:
+def run_prod_readiness_check(
+    *, config_path: str, service_path: str, json_output: bool
+) -> int:
     results: list[CheckResult] = []
     _check_os_kernel(results)
     cfg = _check_config(results, Path(config_path))
@@ -264,7 +355,8 @@ def run_prod_readiness_check(*, config_path: str, service_path: str, json_output
         for item in results:
             mark = {"pass": "PASS", "warn": "WARN", "fail": "FAIL"}[item.status]
             print(f"[{mark}] {item.name}: {item.detail}")
-        print(f"Summary: PASS={counts['pass']} WARN={counts['warn']} FAIL={counts['fail']}")
+        print(
+            f"Summary: PASS={counts['pass']} WARN={counts['warn']} FAIL={counts['fail']}"
+        )
 
     return 0 if counts["fail"] == 0 else 2
-

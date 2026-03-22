@@ -45,22 +45,29 @@ def _write_config(tmp_path, data: dict) -> Path:
 
 # ---------- get_config: базовые ----------
 
+
 def test_get_config_minimal(tmp_path):
-    cfg_path = _write_config(tmp_path, {
-        "orchestrator": {"mode": "active"},
-        "sensors": {},
-        "paths": {},
-    })
+    cfg_path = _write_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active"},
+            "sensors": {},
+            "paths": {},
+        },
+    )
     cfg = get_config(str(cfg_path))
     assert cfg["orchestrator"]["mode"] == "active"
 
 
 def test_get_config_with_env_override(tmp_path):
-    cfg_path = _write_config(tmp_path, {
-        "orchestrator": {"mode": "active", "worker_count": 4},
-        "sensors": {},
-        "paths": {},
-    })
+    cfg_path = _write_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active", "worker_count": 4},
+            "sensors": {},
+            "paths": {},
+        },
+    )
     os.environ["PHANTOM_ORCHESTRATOR__WORKER_COUNT"] = "8"
     try:
         cfg = get_config(str(cfg_path))
@@ -70,20 +77,26 @@ def test_get_config_with_env_override(tmp_path):
 
 
 def test_get_config_immutable(tmp_path):
-    cfg_path = _write_config(tmp_path, {
-        "orchestrator": {"mode": "active"},
-        "paths": {},
-    })
+    cfg_path = _write_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active"},
+            "paths": {},
+        },
+    )
     cfg = get_config(str(cfg_path))
     with pytest.raises(TypeError):
         cfg["new_key"] = "value"
 
 
 def test_get_config_reload(tmp_path):
-    cfg_path = _write_config(tmp_path, {
-        "orchestrator": {"mode": "active"},
-        "paths": {},
-    })
+    cfg_path = _write_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active"},
+            "paths": {},
+        },
+    )
     cfg1 = get_config(str(cfg_path))
     assert cfg1["orchestrator"]["mode"] == "active"
 
@@ -93,25 +106,31 @@ def test_get_config_reload(tmp_path):
 
 
 def test_get_config_env_path(tmp_path):
-    cfg_path = _write_config(tmp_path, {"orchestrator": {"mode": "dry_run"}, "paths": {}})
+    cfg_path = _write_config(
+        tmp_path, {"orchestrator": {"mode": "dry_run"}, "paths": {}}
+    )
     os.environ["PHANTOM_CONFIG_PATH"] = str(cfg_path)
     cfg = get_config()
     assert cfg["orchestrator"]["mode"] == "dry_run"
 
 
 def test_get_config_profiles(tmp_path):
-    cfg_path = _write_config(tmp_path, {
-        "orchestrator": {"mode": "active"},
-        "paths": {},
-        "profiles": {
-            "prod": {"orchestrator": {"worker_count": 8}},
+    cfg_path = _write_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active"},
+            "paths": {},
+            "profiles": {
+                "prod": {"orchestrator": {"worker_count": 8}},
+            },
         },
-    })
+    )
     cfg = get_config(str(cfg_path), profile="prod")
     assert cfg["orchestrator"]["mode"] == "active"
 
 
 # ---------- get_config: ошибки ----------
+
 
 def test_config_missing_file():
     with pytest.raises(ConfigError):
@@ -155,15 +174,20 @@ def test_config_too_large(tmp_path):
 def test_config_empty_path_value(tmp_path):
     """Пустое значение пути — ConfigError."""
     p = tmp_path / "phantom.yaml"
-    p.write_text(yaml.safe_dump({
-        "paths": {"logs_dir": "", "traps_dir": "/tmp/traps"},
-    }))
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "paths": {"logs_dir": "", "traps_dir": "/tmp/traps"},
+            }
+        )
+    )
     os.chmod(p, 0o600)
     with pytest.raises(ConfigError, match="empty"):
         get_config(str(p))
 
 
 # ---------- _infer_type ----------
+
 
 def test_infer_type_bool():
     assert _infer_type("true") is True
@@ -193,6 +217,7 @@ def test_infer_type_string():
 
 
 # ---------- _deep_merge ----------
+
 
 def test_deep_merge_basic():
     base = {"a": 1, "b": {"c": 2}}
@@ -224,6 +249,7 @@ def test_deep_merge_does_not_mutate_base():
 
 # ---------- _deep_freeze ----------
 
+
 def test_deep_freeze_dict():
     frozen = _deep_freeze({"a": 1})
     with pytest.raises(TypeError):
@@ -251,15 +277,20 @@ def test_deep_freeze_primitives():
 
 # ---------- кэширование ----------
 
+
 def test_config_caches_result(tmp_path):
-    cfg_path = _write_config(tmp_path, {"orchestrator": {"mode": "active"}, "paths": {}})
+    cfg_path = _write_config(
+        tmp_path, {"orchestrator": {"mode": "active"}, "paths": {}}
+    )
     cfg1 = get_config(str(cfg_path))
     cfg2 = get_config(str(cfg_path))
     assert cfg1 is cfg2
 
 
 def test_clear_cache_forces_reload(tmp_path):
-    cfg_path = _write_config(tmp_path, {"orchestrator": {"mode": "active"}, "paths": {}})
+    cfg_path = _write_config(
+        tmp_path, {"orchestrator": {"mode": "active"}, "paths": {}}
+    )
     cfg1 = get_config(str(cfg_path))
     clear_cache()
     cfg2 = get_config(str(cfg_path))

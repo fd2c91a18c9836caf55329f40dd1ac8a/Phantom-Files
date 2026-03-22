@@ -31,6 +31,7 @@ logger = logging.getLogger("phantom.sandbox")
 @dataclass
 class SandboxResult:
     """Результат анализа в песочнице."""
+
     container_id: str
     container_name: str
     exit_code: int
@@ -83,6 +84,7 @@ class SandboxRunner:
 
         try:
             import docker  # type: ignore
+
             self._docker = docker.from_env()
             # Проверяем доступность Docker
             self._docker.ping()
@@ -169,10 +171,13 @@ class SandboxRunner:
 
         logger.info(
             "Starting sandbox: container=%s image=%s timeout=%ds",
-            container_name, image, timeout,
+            container_name,
+            image,
+            timeout,
         )
 
         import time as _time
+
         start_ts = _time.monotonic()
         timed_out = False
         container = None
@@ -191,8 +196,11 @@ class SandboxRunner:
                 pids_limit=pids_limit,
                 privileged=False,  # H7 fix: явно запрещаем privileged режим
                 cap_drop=["ALL"],
-                security_opt=["no-new-privileges"],  # H7 fix: запрет эскалации привилегий
-                tmpfs={"/tmp": "size=64m"},
+                security_opt=[
+                    "no-new-privileges"
+                ],  # H7 fix: запрет эскалации привилегий
+                # Bandit false positive: explicit container tmpfs mount.
+                tmpfs={"/tmp": "size=64m"},  # nosec B108
                 volumes=volumes or None,
                 labels={
                     "phantom.sandbox": "true",
@@ -219,7 +227,11 @@ class SandboxRunner:
             logs = await asyncio.to_thread(
                 container.logs, stdout=True, stderr=True, tail=10000
             )
-            logs_text = logs.decode("utf-8", errors="replace") if isinstance(logs, bytes) else str(logs)
+            logs_text = (
+                logs.decode("utf-8", errors="replace")
+                if isinstance(logs, bytes)
+                else str(logs)
+            )
 
             # Сохраняем логи в файл
             logs_path = run_dir / "container.log"
@@ -227,9 +239,7 @@ class SandboxRunner:
 
             # Экспорт артефактов из контейнера
             artifacts = [str(logs_path)]
-            artifacts.extend(
-                await self._export_artifacts(container, run_dir)
-            )
+            artifacts.extend(await self._export_artifacts(container, run_dir))
 
             result = SandboxResult(
                 container_id=container.id,
@@ -243,7 +253,10 @@ class SandboxRunner:
 
             logger.info(
                 "Sandbox finished: container=%s exit=%d duration=%.1fs timed_out=%s",
-                container_name, exit_code, elapsed, timed_out,
+                container_name,
+                exit_code,
+                elapsed,
+                timed_out,
             )
             return result
 
@@ -267,8 +280,8 @@ class SandboxRunner:
                     pass
 
     # R3-H4 fix: лимиты для защиты от tarbomb/OOM
-    _MAX_TAR_BYTES = 256 * 1024 * 1024   # 256 MiB макс. размер архива
-    _MAX_EXTRACT_FILES = 10_000           # макс. файлов при распаковке
+    _MAX_TAR_BYTES = 256 * 1024 * 1024  # 256 MiB макс. размер архива
+    _MAX_EXTRACT_FILES = 10_000  # макс. файлов при распаковке
     _MAX_EXTRACT_BYTES = 512 * 1024 * 1024  # 512 MiB суммарный размер
 
     async def _export_artifacts(self, container: Any, run_dir: Path) -> list[str]:
@@ -277,14 +290,21 @@ class SandboxRunner:
         # Пытаемся извлечь /tmp/output из контейнера
         try:
             import tarfile
-            bits, _ = await asyncio.to_thread(container.get_archive, "/tmp/output")
+
+            # Bandit false positive: fixed artifact path inside sandbox container.
+            bits, _ = await asyncio.to_thread(
+                container.get_archive, "/tmp/output"
+            )  # nosec B108
             # R3-H4 fix: streaming сбор с лимитом размера
             collected: list[bytes] = []
             total = 0
             for chunk in bits:
                 total += len(chunk)
                 if total > self._MAX_TAR_BYTES:
-                    logger.warning("Sandbox tar exceeds %d bytes limit, truncating", self._MAX_TAR_BYTES)
+                    logger.warning(
+                        "Sandbox tar exceeds %d bytes limit, truncating",
+                        self._MAX_TAR_BYTES,
+                    )
                     break
                 collected.append(chunk)
             tar_bytes = b"".join(collected)
@@ -317,7 +337,7 @@ class SandboxRunner:
         for member in tf.getmembers():
             if member.isdev() or member.issym() or member.islnk():
                 continue
-            member_path = (target_dir / member.name)
+            member_path = target_dir / member.name
             if not self._is_within_directory(target_dir, member_path):
                 continue
             if member.isdir():
@@ -325,11 +345,17 @@ class SandboxRunner:
                 continue
             file_count += 1
             if file_count > self._MAX_EXTRACT_FILES:
-                logger.warning("Sandbox tar: too many files (>%d), stopping", self._MAX_EXTRACT_FILES)
+                logger.warning(
+                    "Sandbox tar: too many files (>%d), stopping",
+                    self._MAX_EXTRACT_FILES,
+                )
                 break
             total_bytes += max(0, member.size)
             if total_bytes > self._MAX_EXTRACT_BYTES:
-                logger.warning("Sandbox tar: total size exceeds %d bytes, stopping", self._MAX_EXTRACT_BYTES)
+                logger.warning(
+                    "Sandbox tar: total size exceeds %d bytes, stopping",
+                    self._MAX_EXTRACT_BYTES,
+                )
                 break
             parent = member_path.parent
             parent.mkdir(parents=True, exist_ok=True)
@@ -354,8 +380,12 @@ class SandboxRunner:
                 try:
                     created = c.attrs.get("Created", "")
                     if created:
-                        created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                        age = (datetime.now(timezone.utc) - created_dt).total_seconds() / 3600
+                        created_dt = datetime.fromisoformat(
+                            created.replace("Z", "+00:00")
+                        )
+                        age = (
+                            datetime.now(timezone.utc) - created_dt
+                        ).total_seconds() / 3600
                         if age > max_age_hours:
                             await asyncio.to_thread(c.remove, force=True)
                             removed += 1

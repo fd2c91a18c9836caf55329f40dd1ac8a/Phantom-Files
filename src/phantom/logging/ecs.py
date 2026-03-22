@@ -40,4 +40,3 @@ class ECSFormatter(logging.Formatter):
         import json
 
         return json.dumps(ecs, ensure_ascii=False)
-

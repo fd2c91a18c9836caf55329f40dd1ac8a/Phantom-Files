@@ -7,7 +7,13 @@ import pytest
 import yaml
 
 from phantom.core.state import (
-    Context, Decision, Event, EventType, ResponseAction, RunMode, Severity,
+    Context,
+    Decision,
+    Event,
+    EventType,
+    ResponseAction,
+    RunMode,
+    Severity,
 )
 
 
@@ -39,6 +45,7 @@ def _decision() -> Decision:
 def _make_control(tmp_path):
     """Создаёт ControlPlane с тестовыми путями."""
     import os
+
     # Подготовка минимального конфига
     config_dir = tmp_path / "config"
     config_dir.mkdir(exist_ok=True)
@@ -67,9 +74,11 @@ def _make_control(tmp_path):
     os.chmod(cfg_path, 0o600)
 
     from phantom.core.config import clear_cache
+
     clear_cache()
 
     from phantom.core.control_plane import ControlPlane
+
     loop = asyncio.new_event_loop()
     cp = ControlPlane(loop)
     return cp, loop, policies_path
@@ -148,21 +157,28 @@ def test_policy_cooldown(tmp_path):
 def test_create_block_invalid_kind(tmp_path):
     cp, loop, _ = _make_control(tmp_path)
     with pytest.raises(ValueError, match="kind"):
-        loop.run_until_complete(cp.create_block({"kind": "invalid", "targets": ["1.2.3.4"]}, role="admin"))
+        loop.run_until_complete(
+            cp.create_block({"kind": "invalid", "targets": ["1.2.3.4"]}, role="admin")
+        )
     loop.close()
 
 
 def test_create_block_empty_targets(tmp_path):
     cp, loop, _ = _make_control(tmp_path)
     with pytest.raises(ValueError, match="targets"):
-        loop.run_until_complete(cp.create_block({"kind": "ip", "targets": []}, role="admin"))
+        loop.run_until_complete(
+            cp.create_block({"kind": "ip", "targets": []}, role="admin")
+        )
     loop.close()
 
 
 def test_mutate_templates_requires_role(tmp_path):
     cp, loop, _ = _make_control(tmp_path)
     with pytest.raises(PermissionError):
-        cp.mutate_templates({"action": "add", "source": "x", "name": "y", "version": "v1.0.0"}, role="viewer")
+        cp.mutate_templates(
+            {"action": "add", "source": "x", "name": "y", "version": "v1.0.0"},
+            role="viewer",
+        )
     loop.close()
 
 

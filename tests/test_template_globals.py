@@ -11,7 +11,9 @@ def test_template_globals_and_datasets_are_merged(tmp_path: Path) -> None:
     ds_yaml = tmp_path / "global.yaml"
     ds_yaml.write_text("nested:\n  a: 1\n  b: 2\n", encoding="utf-8")
     ds_json = tmp_path / "global.json"
-    ds_json.write_text(json.dumps({"nested": {"b": 3, "c": 4}, "env": "prod"}), encoding="utf-8")
+    ds_json.write_text(
+        json.dumps({"nested": {"b": 3, "c": 4}, "env": "prod"}), encoding="utf-8"
+    )
 
     config = {
         "paths": {

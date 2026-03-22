@@ -25,7 +25,9 @@ def test_resolve_pid_for_path(monkeypatch):
         return types.SimpleNamespace(returncode=0, stdout="123\n", stderr="")
 
     monkeypatch.setattr(filters.subprocess, "run", _fake_run)
-    monkeypatch.setattr(filters.Path, "read_text", lambda self, **kwargs: "cmd")  # noqa: ANN001
+    monkeypatch.setattr(
+        filters.Path, "read_text", lambda self, **kwargs: "cmd"
+    )  # noqa: ANN001
     pid, name = filters.resolve_pid_for_path("/tmp/file")
     assert pid == 123
     assert name == "cmd"

@@ -10,7 +10,13 @@ from phantom.core.orchestrator import (
     ThreatAnalyzer,
 )
 from phantom.core.state import (
-    Context, Event, EventType, ProcessInfo, RunMode, Severity, ThreatCategory,
+    Context,
+    Event,
+    EventType,
+    ProcessInfo,
+    RunMode,
+    Severity,
+    ThreatCategory,
 )
 
 
@@ -34,6 +40,7 @@ def _context(**kwargs) -> Context:
 
 
 # ---------- ThreatAnalyzer ----------
+
 
 def test_analyzer_whitelist():
     cfg = OrchestratorConfig(whitelist_process_names={"systemd"})
@@ -87,6 +94,7 @@ def test_analyzer_no_process():
 
 
 # ---------- DecisionEngine ----------
+
 
 def test_decision_active_default_actions():
     cfg = OrchestratorConfig(mode=RunMode.ACTIVE)
@@ -142,6 +150,7 @@ def test_decision_dry_run_underscore():
 
 
 # ---------- Orchestrator ----------
+
 
 def test_orchestrator_stats_initial():
     orch = Orchestrator()

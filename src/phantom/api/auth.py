@@ -36,6 +36,7 @@ _ISSUER = "phantom-daemon"
 @dataclass(frozen=True)
 class TokenClaims:
     """Распарсенные данные из JWT-токена."""
+
     sub: str
     role: str
     token_type: str  # "access" | "refresh"
@@ -78,8 +79,10 @@ class JWTProvider:
         self._revoked_jti: dict[str, float] = {}
         self._max_revoked = 10000
         self._revoked_lock = threading.Lock()
-        store_raw = revoked_store_path or os.getenv("PHANTOM_JWT_REVOKED_STORE", "/var/lib/phantom/jwt_revoked.json")
-        self._revoked_store_path = Path(store_raw).expanduser()
+        store_raw = revoked_store_path or os.getenv(
+            "PHANTOM_JWT_REVOKED_STORE", "/var/lib/phantom/jwt_revoked.json"
+        )
+        self._revoked_store_path = Path(str(store_raw)).expanduser()
         self._revocation_persistent = False
         self._revocation_persistent = self._init_revoked_store()
         if self._revocation_persistent:
@@ -95,7 +98,7 @@ class JWTProvider:
         """Выпуск refresh-токена."""
         return self._issue(subject, role, "refresh", self._refresh_ttl)
 
-    def issue_token_pair(self, subject: str, role: str) -> dict[str, str]:
+    def issue_token_pair(self, subject: str, role: str) -> dict[str, str | int]:
         """Выпуск пары access + refresh токенов."""
         return {
             "access_token": self.issue_access_token(subject, role),
@@ -147,7 +150,7 @@ class JWTProvider:
             jti=jti,
         )
 
-    def refresh(self, refresh_token: str) -> Optional[dict[str, str]]:
+    def refresh(self, refresh_token: str) -> Optional[dict[str, str | int]]:
         """
         Обновление токенов по refresh-токену.
 
@@ -219,9 +222,13 @@ class JWTProvider:
             "revoked_jti": self._revoked_jti,
             "updated_at": int(time.time()),
         }
-        tmp_path = self._revoked_store_path.with_suffix(self._revoked_store_path.suffix + ".tmp")
+        tmp_path = self._revoked_store_path.with_suffix(
+            self._revoked_store_path.suffix + ".tmp"
+        )
         try:
-            tmp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            tmp_path.write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
             os.replace(tmp_path, self._revoked_store_path)
         except Exception as exc:
             logger.warning("Failed to persist JWT revocation store: %s", exc)

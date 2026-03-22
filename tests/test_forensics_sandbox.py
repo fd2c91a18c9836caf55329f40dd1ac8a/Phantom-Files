@@ -44,7 +44,9 @@ def test_forensics_collect_sandbox(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(forensics, "get_path", lambda name: str(tmp_path))
     monkeypatch.setattr(forensics, "get_config", lambda: cfg)
-    monkeypatch.setattr(forensics, "get_precapture_manager", lambda _cfg: _DummyPrecapture())
+    monkeypatch.setattr(
+        forensics, "get_precapture_manager", lambda _cfg: _DummyPrecapture()
+    )
     monkeypatch.setattr(forensics, "SandboxRunner", lambda: _DummySandbox(artifact))
 
     collector = forensics.ForensicsCollector()

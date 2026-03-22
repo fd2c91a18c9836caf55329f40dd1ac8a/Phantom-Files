@@ -50,7 +50,9 @@ def test_retry_pending_includes_telegram(tmp_path, monkeypatch):
     exporter._webhooks = []
     exporter._syslog_enabled = False
     exporter._pending_queue.clear()
-    exporter._pending_queue.append({"decision": {"priority": "high"}, "context": {"event": {}}})
+    exporter._pending_queue.append(
+        {"decision": {"priority": "high"}, "context": {"event": {}}}
+    )
 
     calls = {"telegram": 0}
 

@@ -21,7 +21,9 @@ def test_chain_state_updates(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(forensics, "get_path", lambda name: str(tmp_path))
     monkeypatch.setattr(forensics, "get_config", lambda: cfg)
-    monkeypatch.setattr(forensics, "get_precapture_manager", lambda _cfg: _DummyPrecapture())
+    monkeypatch.setattr(
+        forensics, "get_precapture_manager", lambda _cfg: _DummyPrecapture()
+    )
 
     collector = forensics.ForensicsCollector()
     bundle1 = tmp_path / "bundle1.tar.gz"

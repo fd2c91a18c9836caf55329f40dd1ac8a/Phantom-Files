@@ -73,11 +73,14 @@ class TrapRotator:
             try:
                 _loop = asyncio.get_running_loop()
             except RuntimeError as exc:
-                raise RuntimeError("TrapRotator.start requires a running event loop") from exc
+                raise RuntimeError(
+                    "TrapRotator.start requires a running event loop"
+                ) from exc
         self._task = _loop.create_task(self._rotation_loop())
         logger.info(
             "Trap rotation started: interval=%ds batch=%d",
-            self._interval, self._batch_size,
+            self._interval,
+            self._batch_size,
         )
 
     def stop(self) -> None:
@@ -137,7 +140,9 @@ class TrapRotator:
         for i in range(self._batch_size):
             idx = (self._rotation_index + i) % len(eligible)
             batch.append(eligible[idx])
-        self._rotation_index = (self._rotation_index + self._batch_size) % max(1, len(eligible))
+        self._rotation_index = (self._rotation_index + self._batch_size) % max(
+            1, len(eligible)
+        )
 
         rotated = 0
         for entry in batch:
@@ -168,7 +173,9 @@ class TrapRotator:
             return
         except OSError as exc:
             # O_NOFOLLOW на симлинке вернёт ELOOP — пропускаем
-            logger.debug("Cannot open trap for rotation (symlink or error): %s: %s", path, exc)
+            logger.debug(
+                "Cannot open trap for rotation (symlink or error): %s: %s", path, exc
+            )
             return
 
         try:
@@ -186,7 +193,9 @@ class TrapRotator:
         # Атомарная запись через tmp файл
         tmp_path = None
         try:
-            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+            fd, tmp_name = tempfile.mkstemp(
+                prefix=f".{path.name}.", dir=str(path.parent)
+            )
             tmp_path = Path(tmp_name)
             with os.fdopen(fd, "wb") as fh:
                 fh.write(new_content)
@@ -239,6 +248,7 @@ class TrapRotator:
             # Для остальных — меняем последние 4 байта.
             if data[:4] == b"PK\x03\x04":
                 import struct as _struct
+
                 comment = os.urandom(8)
                 # Ищем End of Central Directory (PK\x05\x06)
                 eocd_pos = data.rfind(b"PK\x05\x06")
@@ -247,7 +257,7 @@ class TrapRotator:
                     old_len = _struct.unpack_from("<H", data, eocd_pos + 20)[0]
                     tail_offset = eocd_pos + 22 + old_len
                     if tail_offset <= len(data):
-                        head = data[:eocd_pos + 20]
+                        head = data[: eocd_pos + 20]
                         tail = data[tail_offset:]
                         return head + _struct.pack("<H", len(comment)) + comment + tail
             marker = os.urandom(4)

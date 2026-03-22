@@ -52,8 +52,12 @@ class EvidenceStorage:
         self._client = None
         self._bucket = str(self._s3_cfg.get("bucket", "")).strip()
         self._prefix = str(self._s3_cfg.get("prefix", "evidence")).strip().strip("/")
-        self._encryption_key_env = str(self._s3_cfg.get("encryption_key_env", "PHANTOM_EVIDENCE_KEY_B64"))
-        self._require_encryption = bool(self._s3_cfg.get("require_encryption", self._enabled))
+        self._encryption_key_env = str(
+            self._s3_cfg.get("encryption_key_env", "PHANTOM_EVIDENCE_KEY_B64")
+        )
+        self._require_encryption = bool(
+            self._s3_cfg.get("require_encryption", self._enabled)
+        )
         self._object_lock_days = int(self._s3_cfg.get("object_lock_days", 90))
         self._upload_timeout = int(self._s3_cfg.get("upload_timeout_seconds", 30))
 
@@ -87,8 +91,12 @@ class EvidenceStorage:
             self._enabled = False
             return
 
-        access_key_env = str(self._s3_cfg.get("access_key_env", "PHANTOM_S3_ACCESS_KEY"))
-        secret_key_env = str(self._s3_cfg.get("secret_key_env", "PHANTOM_S3_SECRET_KEY"))
+        access_key_env = str(
+            self._s3_cfg.get("access_key_env", "PHANTOM_S3_ACCESS_KEY")
+        )
+        secret_key_env = str(
+            self._s3_cfg.get("secret_key_env", "PHANTOM_S3_SECRET_KEY")
+        )
         access_key = os.getenv(access_key_env, "").strip()
         secret_key = os.getenv(secret_key_env, "").strip()
         endpoint_url = str(self._s3_cfg.get("endpoint_url", "")).strip() or None
@@ -100,11 +108,17 @@ class EvidenceStorage:
             self._enabled = False
             return
         if not access_key or not secret_key:
-            logger.error("S3 storage enabled but credentials are missing in environment")
+            logger.error(
+                "S3 storage enabled but credentials are missing in environment"
+            )
             self._enabled = False
             return
 
-        cfg = Config(connect_timeout=self._upload_timeout, read_timeout=self._upload_timeout, retries={"max_attempts": 3})
+        cfg = Config(
+            connect_timeout=self._upload_timeout,
+            read_timeout=self._upload_timeout,
+            retries={"max_attempts": 3},
+        )
         self._client = boto3.client(
             "s3",
             endpoint_url=endpoint_url,
@@ -128,7 +142,9 @@ class EvidenceStorage:
         try:
             key = base64.b64decode(key_raw, validate=True)
             if len(key) != 32:
-                logger.error("Invalid evidence encryption key length; expected 32 bytes after base64 decode")
+                logger.error(
+                    "Invalid evidence encryption key length; expected 32 bytes after base64 decode"
+                )
                 return None
             from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         except Exception as exc:
@@ -140,7 +156,10 @@ class EvidenceStorage:
         encrypted_path = path.with_suffix(path.suffix + ".enc.json")
         encoder = _Base64Encoder()
         try:
-            with path.open("rb") as src, encrypted_path.open("w", encoding="utf-8") as out:
+            with (
+                path.open("rb") as src,
+                encrypted_path.open("w", encoding="utf-8") as out,
+            ):
                 prefix = (
                     '{"alg":"AES-256-GCM","nonce_b64":'
                     + json.dumps(base64.b64encode(nonce).decode("ascii"))

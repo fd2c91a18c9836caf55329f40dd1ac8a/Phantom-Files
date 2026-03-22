@@ -8,8 +8,8 @@ from phantom.telemetry.precapture import (
     PreCaptureManager,
 )
 
-
 # ---------- _extract_ports: IPv4 TCP ----------
+
 
 def test_extract_ports_ipv4_tcp():
     eth = bytes.fromhex("00112233445566778899aabb0800")
@@ -23,6 +23,7 @@ def test_extract_ports_ipv4_tcp():
 
 # ---------- _extract_ports: IPv4 UDP ----------
 
+
 def test_extract_ports_ipv4_udp():
     eth = bytes.fromhex("00112233445566778899aabb0800")
     # IHL=5, proto=17 (UDP)
@@ -35,6 +36,7 @@ def test_extract_ports_ipv4_udp():
 
 
 # ---------- _extract_ports: IPv6 TCP ----------
+
 
 def test_extract_ports_ipv6_tcp():
     eth = bytes.fromhex("00112233445566778899aabb86dd")
@@ -51,6 +53,7 @@ def test_extract_ports_ipv6_tcp():
 
 # ---------- _extract_ports: IPv6 UDP ----------
 
+
 def test_extract_ports_ipv6_udp():
     eth = bytes.fromhex("00112233445566778899aabb86dd")
     # next_header=17 (UDP)
@@ -66,6 +69,7 @@ def test_extract_ports_ipv6_udp():
 
 # ---------- _extract_ports: VLAN (802.1Q) ----------
 
+
 def test_extract_ports_vlan():
     """802.1Q VLAN tag (EtherType 0x8100) перед реальным EtherType."""
     eth = bytes.fromhex("00112233445566778899aabb8100")
@@ -79,6 +83,7 @@ def test_extract_ports_vlan():
 
 
 # ---------- _extract_ports: edge cases ----------
+
 
 def test_extract_ports_too_short():
     assert _extract_ports(b"") == (None, None)
@@ -116,6 +121,7 @@ def test_extract_ports_ipv4_truncated_l4():
 
 # ---------- PreCaptureManager ----------
 
+
 def test_manager_default_status():
     mgr = PreCaptureManager()
     status = mgr.status()
@@ -128,18 +134,20 @@ def test_manager_default_status():
 
 def test_manager_configure():
     mgr = PreCaptureManager()
-    mgr.configure({
-        "forensics": {
-            "pcap_precapture": {
-                "enabled": True,
-                "max_buffer_mb": 32,
-                "pre_seconds": 10,
-                "post_seconds": 15,
-                "snaplen": 1500,
-                "capture_ports": [80, 443],
+    mgr.configure(
+        {
+            "forensics": {
+                "pcap_precapture": {
+                    "enabled": True,
+                    "max_buffer_mb": 32,
+                    "pre_seconds": 10,
+                    "post_seconds": 15,
+                    "snaplen": 1500,
+                    "capture_ports": [80, 443],
+                }
             }
         }
-    })
+    )
     assert mgr._max_buffer_mb == 32
     assert mgr._pre_seconds == 10.0
     assert mgr._post_seconds == 15.0
@@ -157,14 +165,16 @@ def test_manager_configure_disabled():
 def test_manager_configure_min_values():
     """Минимальные пороги для snaplen и max_buffer_mb."""
     mgr = PreCaptureManager()
-    mgr.configure({
-        "forensics": {
-            "pcap_precapture": {
-                "snaplen": 10,       # min 256
-                "max_buffer_mb": 1,  # min 8
+    mgr.configure(
+        {
+            "forensics": {
+                "pcap_precapture": {
+                    "snaplen": 10,  # min 256
+                    "max_buffer_mb": 1,  # min 8
+                }
             }
         }
-    })
+    )
     assert mgr._snaplen == 256
     assert mgr._max_buffer_mb == 8
 

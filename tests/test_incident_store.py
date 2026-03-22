@@ -20,4 +20,3 @@ async def _run() -> None:
 
 def test_incident_dedup() -> None:
     asyncio.run(_run())
-

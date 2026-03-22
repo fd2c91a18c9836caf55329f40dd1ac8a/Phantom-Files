@@ -133,9 +133,9 @@ jobs:
           python-version: "3.11"
           cache: "pip"
       - name: Install security tools
-        run: pip install -e ".[dev]"
+        run: pip install pip-audit bandit
       - name: pip-audit
-        run: pip-audit --strict
+        run: pip-audit --strict .
       - name: Bandit scan
         run: bandit -r src/phantom/ -ll --skip B101,B404,B603
 
@@ -160,7 +160,7 @@ jobs:
 
   build-deb-rpm:
     runs-on: ubuntu-latest
-    needs: [unit, integration]
+    needs: [lint, unit, integration]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4

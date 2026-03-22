@@ -61,7 +61,9 @@ def _extract_ports(packet: bytes) -> tuple[Optional[int], Optional[int]]:
         if proto not in (6, 17):
             return None, None
         l4 = offset + ihl
-        return int.from_bytes(packet[l4 : l4 + 2], "big"), int.from_bytes(packet[l4 + 2 : l4 + 4], "big")
+        return int.from_bytes(packet[l4 : l4 + 2], "big"), int.from_bytes(
+            packet[l4 + 2 : l4 + 4], "big"
+        )
 
     if eth_type == 0x86DD:
         if len(packet) < offset + 40 + 4:
@@ -70,7 +72,9 @@ def _extract_ports(packet: bytes) -> tuple[Optional[int], Optional[int]]:
         if next_header not in (6, 17):
             return None, None
         l4 = offset + 40
-        return int.from_bytes(packet[l4 : l4 + 2], "big"), int.from_bytes(packet[l4 + 2 : l4 + 4], "big")
+        return int.from_bytes(packet[l4 : l4 + 2], "big"), int.from_bytes(
+            packet[l4 + 2 : l4 + 4], "big"
+        )
 
     return None, None
 
@@ -92,7 +96,14 @@ class PreCaptureManager:
         self._mode = "disabled"  # disabled | pre_capture | post_only
         self._reason = "not started"
         self._iface: Optional[str] = None
-        self._source_path = str((Path(__file__).resolve().parent.parent / "sensors" / "ebpf" / "net_capture.bpf.c"))
+        self._source_path = str(
+            (
+                Path(__file__).resolve().parent.parent
+                / "sensors"
+                / "ebpf"
+                / "net_capture.bpf.c"
+            )
+        )
         self._snaplen = 65535
         self._max_buffer_mb = 64
         self._pre_seconds = 30.0
@@ -106,7 +117,11 @@ class PreCaptureManager:
 
     def configure(self, config: Mapping[str, Any]) -> None:
         forensics_cfg = config.get("forensics", {}) if hasattr(config, "get") else {}
-        pcap_cfg = forensics_cfg.get("pcap_precapture", {}) if isinstance(forensics_cfg, dict) else {}
+        pcap_cfg = (
+            forensics_cfg.get("pcap_precapture", {})
+            if isinstance(forensics_cfg, dict)
+            else {}
+        )
         self._enabled = bool(pcap_cfg.get("enabled", True))
         self._iface = str(pcap_cfg.get("interface", "")).strip() or None
         self._source_path = str(pcap_cfg.get("ebpf_program", self._source_path))
@@ -115,7 +130,9 @@ class PreCaptureManager:
         self._max_buffer_mb = max(8, int(pcap_cfg.get("max_buffer_mb", 64)))
         self._pre_seconds = max(0.0, float(pcap_cfg.get("pre_seconds", 30)))
         self._post_seconds = max(0.0, float(pcap_cfg.get("post_seconds", 30)))
-        self._min_memory_mb = max(128, int(pcap_cfg.get("min_memory_mb_for_precapture", 512)))
+        self._min_memory_mb = max(
+            128, int(pcap_cfg.get("min_memory_mb_for_precapture", 512))
+        )
         ports = pcap_cfg.get("capture_ports", [])
         if isinstance(ports, list):
             self._ports = {int(p) for p in ports if str(p).isdigit()}
@@ -140,7 +157,9 @@ class PreCaptureManager:
             self._reason = ""
             self._running = True
             self._stop.clear()
-            self._thread = threading.Thread(target=self._capture_loop, daemon=True, name="phantom-precapture")
+            self._thread = threading.Thread(
+                target=self._capture_loop, daemon=True, name="phantom-precapture"
+            )
             self._thread.start()
             return
         self._mode = "post_only"
@@ -184,7 +203,11 @@ class PreCaptureManager:
             self.start()
 
         pre = self._pre_seconds if pre_seconds is None else max(0.0, float(pre_seconds))
-        post = self._post_seconds if post_seconds is None else max(0.0, float(post_seconds))
+        post = (
+            self._post_seconds
+            if post_seconds is None
+            else max(0.0, float(post_seconds))
+        )
 
         if self._running:
             wait_for = post
@@ -350,7 +373,9 @@ _MANAGER: Optional[PreCaptureManager] = None
 _MANAGER_LOCK = threading.Lock()
 
 
-def get_precapture_manager(config: Optional[Mapping[str, Any]] = None) -> PreCaptureManager:
+def get_precapture_manager(
+    config: Optional[Mapping[str, Any]] = None,
+) -> PreCaptureManager:
     global _MANAGER
     with _MANAGER_LOCK:
         if _MANAGER is None:

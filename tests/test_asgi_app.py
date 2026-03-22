@@ -7,7 +7,6 @@ from starlette.testclient import TestClient
 
 from phantom.api.asgi_app import create_asgi_app, _TokenBucket
 
-
 API_KEY = "test-api-key-very-long-string-12345"
 
 
@@ -32,6 +31,7 @@ def _auth_headers(key: str = API_KEY) -> dict:
 
 # ---------- Health / Metrics ----------
 
+
 def test_health_no_auth():
     client = _client()
     resp = client.get("/health")
@@ -53,6 +53,7 @@ def test_metrics_endpoint():
 
 
 # ---------- Аутентификация ----------
+
 
 def test_incidents_requires_auth():
     client = _client()
@@ -90,6 +91,7 @@ def test_multi_key_auth():
 
 # ---------- RBAC ----------
 
+
 def test_blocks_requires_admin():
     client = _client(api_keys={"viewer-key": "viewer"})
     resp = client.post(
@@ -123,6 +125,7 @@ def test_put_policies_mode_change_forbidden():
 
 # ---------- Rate Limiting ----------
 
+
 def test_rate_limit_not_applied_to_health():
     client = _client(rate_limit_per_minute=1)
     for _ in range(5):
@@ -141,6 +144,7 @@ def test_rate_limit_applied_to_api():
 
 # ---------- Token Bucket ----------
 
+
 def test_token_bucket_consume():
     bucket = _TokenBucket(capacity=5, rate=1.0)
     assert bucket.consume() is True
@@ -155,6 +159,7 @@ def test_token_bucket_exhaustion():
 
 
 # ---------- Request Size Limit ----------
+
 
 def test_body_too_large():
     client = _client()
@@ -190,6 +195,7 @@ def test_body_negative_content_length():
 
 # ---------- 404 ----------
 
+
 def test_not_found():
     client = _client()
     resp = client.get("/api/v1/nonexistent", headers=_auth_headers())
@@ -197,6 +203,7 @@ def test_not_found():
 
 
 # ---------- JWT endpoints ----------
+
 
 def test_auth_token_no_jwt():
     client = _client()
@@ -220,6 +227,7 @@ def test_auth_refresh_no_jwt():
 
 def test_auth_token_with_jwt():
     from phantom.api.auth import JWTProvider
+
     jwt = JWTProvider(secret="a" * 64)
     client = _client(jwt_provider=jwt, security_mode="both")
     resp = client.post(
@@ -235,6 +243,7 @@ def test_auth_token_with_jwt():
 
 def test_jwt_auth_flow():
     from phantom.api.auth import JWTProvider
+
     jwt_prov = JWTProvider(secret="b" * 64)
     client = _client(jwt_provider=jwt_prov, security_mode="jwt")
 
@@ -307,6 +316,7 @@ def test_mtls_mode_rejects_non_loopback_even_with_token():
 
 
 # ---------- Incident by ID ----------
+
 
 def test_get_incident_not_found():
     client = _client()

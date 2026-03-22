@@ -4,8 +4,8 @@ import time
 
 from phantom.api.asgi_app import _TokenBucket
 
-
 # ---------- начальное состояние ----------
+
 
 def test_bucket_initial_full():
     bucket = _TokenBucket(capacity=10, rate=1.0)
@@ -21,6 +21,7 @@ def test_bucket_initial_capacity_one():
 
 
 # ---------- пополнение ----------
+
 
 def test_bucket_refill():
     bucket = _TokenBucket(capacity=2, rate=100.0)
@@ -63,6 +64,7 @@ def test_bucket_refill_does_not_exceed_capacity():
 
 # ---------- consume multiple ----------
 
+
 def test_bucket_rapid_consume():
     """Быстрое consume без пауз."""
     bucket = _TokenBucket(capacity=100, rate=0.0)
@@ -71,6 +73,7 @@ def test_bucket_rapid_consume():
 
 
 # ---------- edge cases ----------
+
 
 def test_bucket_large_capacity():
     bucket = _TokenBucket(capacity=10000, rate=0.0)

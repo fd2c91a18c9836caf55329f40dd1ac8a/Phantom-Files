@@ -33,8 +33,14 @@ class TrapFactory:
         self.paths = config.get("paths", {})
         self.traps_dir = str(self.paths.get("traps_dir", "/var/lib/phantom/traps"))
         self.templates_dir = str(self.paths.get("templates", "resources/templates"))
-        self.user_templates_dir = str(self.paths.get("user_templates_dir", "/etc/phantom/templates"))
-        self.registry_path = str(self.paths.get("trap_registry_file", Path(self.traps_dir) / "trap_registry.json"))
+        self.user_templates_dir = str(
+            self.paths.get("user_templates_dir", "/etc/phantom/templates")
+        )
+        self.registry_path = str(
+            self.paths.get(
+                "trap_registry_file", Path(self.traps_dir) / "trap_registry.json"
+            )
+        )
 
         self.stomp_config = config.get("time_stomping", {})
         self.generator = generator or ContentGenerator(stomp_config=self.stomp_config)
@@ -80,6 +86,7 @@ class TrapFactory:
                 if not path.is_absolute():
                     # R3-M3c fix: resolve от project root, а не от cwd
                     from phantom.core.config import PROJECT_ROOT
+
                     path = PROJECT_ROOT / path
                 loaded = self._load_dataset(path)
                 if loaded:
@@ -111,7 +118,9 @@ class TrapFactory:
             return {}
         return data
 
-    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge(
+        self, base: Dict[str, Any], override: Dict[str, Any]
+    ) -> Dict[str, Any]:
         merged = dict(base)
         for key, value in override.items():
             if isinstance(merged.get(key), dict) and isinstance(value, dict):
@@ -135,7 +144,9 @@ class TrapFactory:
             try:
                 candidate.relative_to(root)
             except ValueError:
-                logger.warning("Template path escapes root via symlink: %s", raw_candidate)
+                logger.warning(
+                    "Template path escapes root via symlink: %s", raw_candidate
+                )
                 continue
             if candidate.exists() and candidate.is_file():
                 candidates.append(candidate)
@@ -236,9 +247,13 @@ class TrapFactory:
         try:
             if task.fmt == "text":
                 trap_ctx = self.generator.create_trap_context(self.base_context)
-                self.generator.create_text_trap(str(tpl_path), str(out_path), trap_ctx, metadata=metadata)
+                self.generator.create_text_trap(
+                    str(tpl_path), str(out_path), trap_ctx, metadata=metadata
+                )
             else:
-                self.generator.create_binary_trap(str(tpl_path), str(out_path), metadata=metadata)
+                self.generator.create_binary_trap(
+                    str(tpl_path), str(out_path), metadata=metadata
+                )
             return True
         except Exception as exc:
             logger.error("Trap %s generation failed: %s", task.trap_id, exc)

@@ -48,6 +48,7 @@ def _setup_config(tmp_path, data=None) -> str:
 
 def test_validate_valid_config(tmp_path):
     from phantom.cli import main
+
     cfg_path = _setup_config(tmp_path)
     rc = main(["--config", cfg_path, "validate"])
     assert rc == 0
@@ -55,12 +56,14 @@ def test_validate_valid_config(tmp_path):
 
 def test_validate_invalid_config():
     from phantom.cli import main
+
     rc = main(["--config", "/nonexistent/phantom.yaml", "validate"])
     assert rc == 1
 
 
 def test_mode_get(tmp_path):
     from phantom.cli import main
+
     cfg_path = _setup_config(tmp_path)
     rc = main(["--config", cfg_path, "mode", "get"])
     assert rc == 0
@@ -69,6 +72,7 @@ def test_mode_get(tmp_path):
 def test_mode_set_requires_root(tmp_path):
     """mode set требует root (euid == 0). На обычном пользователе вернёт 1."""
     from phantom.cli import main
+
     cfg_path = _setup_config(tmp_path)
     if os.geteuid() == 0:
         pytest.skip("Тест для непривилегированного пользователя")
@@ -78,6 +82,7 @@ def test_mode_set_requires_root(tmp_path):
 
 def test_no_command_shows_help(tmp_path):
     from phantom.cli import main
+
     cfg_path = _setup_config(tmp_path)
     rc = main(["--config", cfg_path])
     assert rc == 0
@@ -85,16 +90,20 @@ def test_no_command_shows_help(tmp_path):
 
 def test_templates_list(tmp_path):
     from phantom.cli import main
+
     templates_dir = tmp_path / "templates"
     templates_dir.mkdir()
-    cfg_path = _setup_config(tmp_path, {
-        "orchestrator": {"mode": "active"},
-        "sensors": {},
-        "paths": {
-            "user_templates_dir": str(templates_dir),
-            "policies": str(tmp_path / "policies.yaml"),
+    cfg_path = _setup_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active"},
+            "sensors": {},
+            "paths": {
+                "user_templates_dir": str(templates_dir),
+                "policies": str(tmp_path / "policies.yaml"),
+            },
         },
-    })
+    )
     rc = main(["--config", cfg_path, "templates", "list"])
     assert rc == 0
 
@@ -109,37 +118,70 @@ def test_templates_add_activate_remove(tmp_path, monkeypatch):
     templates_dir.mkdir()
     source = tmp_path / "template.j2"
     source.write_text("hello {{ name }}", encoding="utf-8")
-    cfg_path = _setup_config(tmp_path, {
-        "orchestrator": {"mode": "active"},
-        "sensors": {},
-        "paths": {
-            "user_templates_dir": str(templates_dir),
-            "policies": str(tmp_path / "policies.yaml"),
+    cfg_path = _setup_config(
+        tmp_path,
+        {
+            "orchestrator": {"mode": "active"},
+            "sensors": {},
+            "paths": {
+                "user_templates_dir": str(templates_dir),
+                "policies": str(tmp_path / "policies.yaml"),
+            },
         },
-    })
+    )
 
-    rc = main([
-        "--config", cfg_path, "templates", "add",
-        "--source", str(source), "--name", "demo", "--version", "v1.0.0",
-    ])
+    rc = main(
+        [
+            "--config",
+            cfg_path,
+            "templates",
+            "add",
+            "--source",
+            str(source),
+            "--name",
+            "demo",
+            "--version",
+            "v1.0.0",
+        ]
+    )
     assert rc == 0
 
-    rc = main([
-        "--config", cfg_path, "templates", "activate",
-        "--name", "demo", "--version", "v1.0.0",
-    ])
+    rc = main(
+        [
+            "--config",
+            cfg_path,
+            "templates",
+            "activate",
+            "--name",
+            "demo",
+            "--version",
+            "v1.0.0",
+        ]
+    )
     assert rc == 0
 
-    rc = main([
-        "--config", cfg_path, "templates", "show",
-        "--name", "demo",
-    ])
+    rc = main(
+        [
+            "--config",
+            cfg_path,
+            "templates",
+            "show",
+            "--name",
+            "demo",
+        ]
+    )
     assert rc == 0
 
-    rc = main([
-        "--config", cfg_path, "templates", "remove",
-        "--name", "demo",
-    ])
+    rc = main(
+        [
+            "--config",
+            cfg_path,
+            "templates",
+            "remove",
+            "--name",
+            "demo",
+        ]
+    )
     assert rc == 0
 
 

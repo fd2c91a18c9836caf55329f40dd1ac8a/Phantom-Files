@@ -61,6 +61,7 @@ def test_upsert_different_pid_different_incident():
 
 def test_upsert_outside_window_new_incident():
     """Событие за пределами окна дедупликации создаёт новый инцидент."""
+
     async def _run():
         store = IncidentStore(dedup_window_seconds=0.01)
         r1 = await store.upsert(_event())

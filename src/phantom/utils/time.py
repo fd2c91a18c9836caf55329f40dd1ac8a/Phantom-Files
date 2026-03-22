@@ -10,4 +10,3 @@ def utcnow() -> datetime:
 
 def isoformat(dt: Optional[datetime] = None) -> str:
     return (dt or utcnow()).isoformat()
-

@@ -12,4 +12,3 @@ def run() -> None:
     from .__main__ import run as _run
 
     _run()
-

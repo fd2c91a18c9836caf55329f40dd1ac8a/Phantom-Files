@@ -2,8 +2,8 @@
 
 from phantom.response.exporters import _is_safe_url
 
-
 # ---------- SSRF-защита ----------
+
 
 def test_safe_url_public():
     # Публичный URL — безопасен

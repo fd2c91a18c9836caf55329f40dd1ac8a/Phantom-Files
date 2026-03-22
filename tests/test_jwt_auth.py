@@ -6,7 +6,6 @@ import pytest
 
 from phantom.api.auth import JWTProvider, get_jwt_provider
 
-
 SECRET = "a" * 64  # 64 символа — достаточно для HMAC-SHA256
 
 
@@ -15,6 +14,7 @@ def _provider(**kwargs) -> JWTProvider:
 
 
 # ---------- Инициализация ----------
+
 
 def test_provider_rejects_short_secret():
     with pytest.raises(ValueError, match="слишком короткий"):
@@ -32,6 +32,7 @@ def test_provider_accepts_valid_secret():
 
 
 # ---------- Выпуск токенов ----------
+
 
 def test_issue_access_token():
     p = _provider()
@@ -57,6 +58,7 @@ def test_issue_token_pair():
 
 # ---------- Валидация ----------
 
+
 def test_validate_access_token():
     p = _provider()
     token = p.issue_access_token("user1", "admin")
@@ -80,10 +82,15 @@ def test_validate_expired_token():
     p = _provider(access_ttl=60)
     # Выпускаем токен и подделываем его exp
     import jwt as pyjwt
+
     payload = {
-        "sub": "user1", "role": "admin", "token_type": "access",
-        "iss": "phantom-daemon", "iat": int(time.time()) - 200,
-        "exp": int(time.time()) - 100, "jti": "test123",
+        "sub": "user1",
+        "role": "admin",
+        "token_type": "access",
+        "iss": "phantom-daemon",
+        "iat": int(time.time()) - 200,
+        "exp": int(time.time()) - 100,
+        "jti": "test123",
     }
     expired = pyjwt.encode(payload, SECRET, algorithm="HS256")
     assert p.validate(expired) is None
@@ -104,17 +111,23 @@ def test_validate_garbage():
 
 def test_validate_wrong_issuer():
     import jwt as pyjwt
+
     p = _provider()
     payload = {
-        "sub": "user1", "role": "admin", "token_type": "access",
-        "iss": "wrong-issuer", "iat": int(time.time()),
-        "exp": int(time.time()) + 3600, "jti": "test123",
+        "sub": "user1",
+        "role": "admin",
+        "token_type": "access",
+        "iss": "wrong-issuer",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 3600,
+        "jti": "test123",
     }
     token = pyjwt.encode(payload, SECRET, algorithm="HS256")
     assert p.validate(token) is None
 
 
 # ---------- Refresh ----------
+
 
 def test_refresh_token_rotation():
     p = _provider()
@@ -145,6 +158,7 @@ def test_refresh_token_revocation_persists_between_provider_instances(tmp_path):
 
 # ---------- Отзыв ----------
 
+
 def test_revoke_token():
     p = _provider()
     token = p.issue_access_token("user1", "admin")
@@ -155,6 +169,7 @@ def test_revoke_token():
 
 
 # ---------- Фабрика ----------
+
 
 def test_get_jwt_provider_returns_none_for_short_secret():
     assert get_jwt_provider(secret="short") is None

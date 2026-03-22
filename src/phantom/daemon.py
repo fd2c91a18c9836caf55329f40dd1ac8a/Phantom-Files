@@ -34,7 +34,9 @@ class DaemonService:
             for task in pending:
                 task.cancel()
             if pending:
-                self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                self._loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
             self._loop.close()
 
     def _request_stop(self) -> None:
@@ -42,4 +44,3 @@ class DaemonService:
             for task in asyncio.all_tasks(loop=self._loop):
                 task.cancel()
             logger.info("Shutdown requested via signal.")
-

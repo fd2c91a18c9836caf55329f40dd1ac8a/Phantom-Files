@@ -106,7 +106,9 @@ class ContentGenerator:
         dst = Path(output_path)
         dst.parent.mkdir(parents=True, exist_ok=True)
 
-        trap_id = metadata.get("trap_id", uuid.uuid4().hex) if metadata else uuid.uuid4().hex
+        trap_id = (
+            metadata.get("trap_id", uuid.uuid4().hex) if metadata else uuid.uuid4().hex
+        )
         try:
             shutil.copy2(src, dst)
             if dst.suffix.lower() in {".docx", ".xlsx", ".pptx", ".zip"}:
@@ -130,4 +132,3 @@ class ContentGenerator:
         watermark = f"\n<!-- PHANTOM_TRAP_ID:{trap_id} -->".encode("utf-8")
         with open(filepath, "ab") as handle:
             handle.write(watermark)
-

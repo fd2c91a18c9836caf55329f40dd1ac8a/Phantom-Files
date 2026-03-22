@@ -6,8 +6,9 @@ import logging
 from phantom.logging.ecs import ecs_dict_from_record, ECSFormatter
 
 
-def _make_record(msg: str = "test message", level: int = logging.INFO,
-                 name: str = "phantom.test") -> logging.LogRecord:
+def _make_record(
+    msg: str = "test message", level: int = logging.INFO, name: str = "phantom.test"
+) -> logging.LogRecord:
     return logging.LogRecord(
         name=name,
         level=level,
@@ -20,6 +21,7 @@ def _make_record(msg: str = "test message", level: int = logging.INFO,
 
 
 # ---------- ecs_dict_from_record ----------
+
 
 def test_ecs_dict_has_required_fields():
     record = _make_record()
@@ -73,6 +75,7 @@ def test_ecs_dict_severity_number():
 
 # ---------- ECSFormatter ----------
 
+
 def test_formatter_returns_json():
     fmt = ECSFormatter()
     record = _make_record()
@@ -88,6 +91,7 @@ def test_formatter_with_exception():
         raise ValueError("test error")
     except ValueError:
         import sys
+
         record = _make_record(msg="exception occurred", level=logging.ERROR)
         record.exc_info = sys.exc_info()
     output = fmt.format(record)
@@ -115,7 +119,13 @@ def test_formatter_unicode():
 
 def test_formatter_all_levels():
     fmt = ECSFormatter()
-    for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL):
+    for level in (
+        logging.DEBUG,
+        logging.INFO,
+        logging.WARNING,
+        logging.ERROR,
+        logging.CRITICAL,
+    ):
         record = _make_record(level=level)
         output = fmt.format(record)
         parsed = json.loads(output)

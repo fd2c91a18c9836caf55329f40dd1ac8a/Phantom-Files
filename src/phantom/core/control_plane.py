@@ -23,7 +23,6 @@ from phantom.logging.audit import AuditLogger
 from phantom.response.enforcement import NetworkEnforcer
 from phantom.response.enforcement import ProcessEnforcer
 
-
 logger = logging.getLogger("phantom.control_plane")
 
 
@@ -175,7 +174,11 @@ class ControlPlane:
         status = "active" if ok else "failed"
 
         now = _utc_now()
-        expires_at = now + timedelta(seconds=ttl_seconds) if ttl_seconds and ttl_seconds > 0 else None
+        expires_at = (
+            now + timedelta(seconds=ttl_seconds)
+            if ttl_seconds and ttl_seconds > 0
+            else None
+        )
         entry = BlockEntry(
             block_id=f"BLK-{uuid.uuid4().hex[:10]}",
             kind=kind,
@@ -188,7 +191,9 @@ class ControlPlane:
         )
         with self._lock:
             self._blocks[entry.block_id] = entry
-        self._audit.log(extra={"api_action": "create_block", "role": role, "block": entry.to_dict()})
+        self._audit.log(
+            extra={"api_action": "create_block", "role": role, "block": entry.to_dict()}
+        )
         return entry.to_dict()
 
     def list_templates(self) -> list[dict[str, Any]]:
@@ -216,10 +221,23 @@ class ControlPlane:
             version = str(payload.get("version", "")).strip()
             if not source or not name or not version:
                 raise ValueError("source, name, version are required")
-            path = self._template_store.add_template(source=source, name=name, version=version)
-            result = {"action": "add", "name": name, "version": version, "path": path}
-            self._audit.log(extra={"api_action": "add_template", "role": role, "template": result})
-            return result
+            path = self._template_store.add_template(
+                source=source, name=name, version=version
+            )
+            add_result: dict[str, Any] = {
+                "action": "add",
+                "name": name,
+                "version": version,
+                "path": path,
+            }
+            self._audit.log(
+                extra={
+                    "api_action": "add_template",
+                    "role": role,
+                    "template": add_result,
+                }
+            )
+            return add_result
 
         if action == "activate":
             if role != "admin":
@@ -229,23 +247,47 @@ class ControlPlane:
             if not name or not version:
                 raise ValueError("name and version are required")
             path = self._template_store.activate_template(name=name, version=version)
-            result = {"action": "activate", "name": name, "version": version, "path": path}
-            self._audit.log(extra={"api_action": "activate_template", "role": role, "template": result})
-            return result
+            activate_result: dict[str, Any] = {
+                "action": "activate",
+                "name": name,
+                "version": version,
+                "path": path,
+            }
+            self._audit.log(
+                extra={
+                    "api_action": "activate_template",
+                    "role": role,
+                    "template": activate_result,
+                }
+            )
+            return activate_result
 
         if action == "remove":
             if role != "admin":
                 raise PermissionError("only admin can remove templates")
             name = str(payload.get("name", "")).strip()
-            version = payload.get("version")  # None = удалить все версии
+            version_value: str | None = payload.get(
+                "version"
+            )  # None = удалить все версии
             if not name:
                 raise ValueError("name is required")
-            if version is not None:
-                version = str(version).strip()
-            removed = self._template_store.remove_template(name, version)
-            result = {"action": "remove", "name": name, "version": version, "removed_count": len(removed)}
-            self._audit.log(extra={"api_action": "remove_template", "role": role, "template": result})
-            return result
+            if version_value is not None:
+                version_value = str(version_value).strip()
+            removed = self._template_store.remove_template(name, version_value)
+            remove_result = {
+                "action": "remove",
+                "name": name,
+                "version": version_value,
+                "removed_count": len(removed),
+            }
+            self._audit.log(
+                extra={
+                    "api_action": "remove_template",
+                    "role": role,
+                    "template": remove_result,
+                }
+            )
+            return remove_result
 
         if action == "show":
             name = str(payload.get("name", "")).strip()
@@ -264,18 +306,19 @@ class ControlPlane:
             return {}
         return data
 
-    def update_policies(self, payload: dict[str, Any], role: str, replace: bool) -> dict[str, Any]:
+    def update_policies(
+        self, payload: dict[str, Any], role: str, replace: bool
+    ) -> dict[str, Any]:
         if role != "admin":
             raise PermissionError("only admin can modify policies")
         # Кулдаун: защита от слишком частых изменений политик
         import time
+
         now = time.monotonic()
         elapsed = now - self._last_policy_change
         if elapsed < self._policy_cooldown_seconds and self._last_policy_change > 0:
             remaining = int(self._policy_cooldown_seconds - elapsed)
-            raise ValueError(
-                f"Policy change cooldown: retry in {remaining}s"
-            )
+            raise ValueError(f"Policy change cooldown: retry in {remaining}s")
         current = self.get_policies()
         if replace:
             updated = dict(payload)
@@ -285,6 +328,7 @@ class ControlPlane:
         # R3-M3a fix: atomic write через temp + os.replace()
         self._policies_path.parent.mkdir(parents=True, exist_ok=True)
         import tempfile as _tempfile
+
         fd, tmp_path = _tempfile.mkstemp(
             dir=str(self._policies_path.parent), suffix=".tmp"
         )
@@ -301,16 +345,20 @@ class ControlPlane:
                 pass
             raise
         self._last_policy_change = now
-        self._audit.log(extra={
-            "api_action": "update_policies",
-            "role": role,
-            "replace": replace,
-            "alert": "policy_changed",
-        })
+        self._audit.log(
+            extra={
+                "api_action": "update_policies",
+                "role": role,
+                "replace": replace,
+                "alert": "policy_changed",
+            }
+        )
         logger.warning("Policies changed by user role=%s replace=%s", role, replace)
         return updated
 
-    async def _submit_network_block(self, ips: list[str], ttl_seconds: Optional[int]) -> bool:
+    async def _submit_network_block(
+        self, ips: list[str], ttl_seconds: Optional[int]
+    ) -> bool:
         # R3-C1 fix: async вместо run_coroutine_threadsafe (deadlock)
         try:
             result = await asyncio.wait_for(
@@ -321,7 +369,9 @@ class ControlPlane:
         except Exception:
             return False
 
-    async def _submit_process_block(self, targets: list[str], ttl_seconds: Optional[int]) -> bool:
+    async def _submit_process_block(
+        self, targets: list[str], ttl_seconds: Optional[int]
+    ) -> bool:
         # R3-C1 fix: async вместо run_coroutine_threadsafe (deadlock)
         ok = True
         for target in targets:

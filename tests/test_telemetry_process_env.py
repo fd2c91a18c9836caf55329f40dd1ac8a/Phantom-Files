@@ -12,7 +12,11 @@ class _DummyProc:
 
 
 def test_env_collection_disabled(monkeypatch):
-    monkeypatch.setattr(processes, "get_config", lambda: {"telemetry": {"process": {"collect_env": False}}})
+    monkeypatch.setattr(
+        processes,
+        "get_config",
+        lambda: {"telemetry": {"process": {"collect_env": False}}},
+    )
     collector = processes.ProcessCollector()
     proc = _DummyProc({"SAFE": "ok"})
     assert collector._safe_env(proc) == {}

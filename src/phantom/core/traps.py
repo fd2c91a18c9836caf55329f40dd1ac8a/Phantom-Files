@@ -84,7 +84,9 @@ class TrapRegistry:
         }
         path = Path(target_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
     def reload_from_json(self, path: str) -> None:
         fresh = self.from_json(path, expected_root=str(self._root))
@@ -92,7 +94,9 @@ class TrapRegistry:
         self._by_path = {entry.output_path: entry for entry in fresh.entries()}
 
     @classmethod
-    def from_entries(cls, traps_root: str, entries: Iterable[TrapEntry]) -> "TrapRegistry":
+    def from_entries(
+        cls, traps_root: str, entries: Iterable[TrapEntry]
+    ) -> "TrapRegistry":
         reg = cls(traps_root=traps_root)
         for entry in entries:
             reg.register(entry)

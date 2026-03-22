@@ -4,8 +4,15 @@ import asyncio
 from datetime import datetime, timezone
 
 from phantom.core.state import (
-    Context, Decision, Event, EventType, NetworkConnection, NetworkInfo,
-    ResponseAction, RunMode, Severity,
+    Context,
+    Decision,
+    Event,
+    EventType,
+    NetworkConnection,
+    NetworkInfo,
+    ResponseAction,
+    RunMode,
+    Severity,
 )
 from phantom.response.dispatcher import Dispatcher
 
@@ -40,39 +47,84 @@ def _decision(actions: tuple, mode: RunMode = RunMode.ACTIVE, **kwargs) -> Decis
 
 # ---------- _action_blocked_by_mode ----------
 
+
 def test_action_blocked_by_dry_run():
     d = Dispatcher()
-    assert d._action_blocked_by_mode(ResponseAction.KILL_PROCESS, RunMode.DRY_RUN) is True
-    assert d._action_blocked_by_mode(ResponseAction.BLOCK_NETWORK, RunMode.DRY_RUN) is True
+    assert (
+        d._action_blocked_by_mode(ResponseAction.KILL_PROCESS, RunMode.DRY_RUN) is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.BLOCK_NETWORK, RunMode.DRY_RUN) is True
+    )
     assert d._action_blocked_by_mode(ResponseAction.BLOCK_IP, RunMode.DRY_RUN) is True
-    assert d._action_blocked_by_mode(ResponseAction.ISOLATE_PROCESS, RunMode.DRY_RUN) is True
-    assert d._action_blocked_by_mode(ResponseAction.QUARANTINE_FILE, RunMode.DRY_RUN) is True
-    assert d._action_blocked_by_mode(ResponseAction.SCAN_PERSISTENCE, RunMode.DRY_RUN) is True
-    assert d._action_blocked_by_mode(ResponseAction.KILL_USER_SESSIONS, RunMode.DRY_RUN) is True
+    assert (
+        d._action_blocked_by_mode(ResponseAction.ISOLATE_PROCESS, RunMode.DRY_RUN)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.QUARANTINE_FILE, RunMode.DRY_RUN)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.SCAN_PERSISTENCE, RunMode.DRY_RUN)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.KILL_USER_SESSIONS, RunMode.DRY_RUN)
+        is True
+    )
 
 
 def test_action_blocked_by_observation():
     d = Dispatcher()
-    assert d._action_blocked_by_mode(ResponseAction.KILL_PROCESS, RunMode.OBSERVATION) is True
-    assert d._action_blocked_by_mode(ResponseAction.ISOLATE_PROCESS, RunMode.OBSERVATION) is True
-    assert d._action_blocked_by_mode(ResponseAction.BLOCK_NETWORK, RunMode.OBSERVATION) is True
-    assert d._action_blocked_by_mode(ResponseAction.BLOCK_IP, RunMode.OBSERVATION) is True
-    assert d._action_blocked_by_mode(ResponseAction.QUARANTINE_FILE, RunMode.OBSERVATION) is True
-    assert d._action_blocked_by_mode(ResponseAction.SCAN_PERSISTENCE, RunMode.OBSERVATION) is True
-    assert d._action_blocked_by_mode(ResponseAction.KILL_USER_SESSIONS, RunMode.OBSERVATION) is True
+    assert (
+        d._action_blocked_by_mode(ResponseAction.KILL_PROCESS, RunMode.OBSERVATION)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.ISOLATE_PROCESS, RunMode.OBSERVATION)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.BLOCK_NETWORK, RunMode.OBSERVATION)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.BLOCK_IP, RunMode.OBSERVATION) is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.QUARANTINE_FILE, RunMode.OBSERVATION)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.SCAN_PERSISTENCE, RunMode.OBSERVATION)
+        is True
+    )
+    assert (
+        d._action_blocked_by_mode(
+            ResponseAction.KILL_USER_SESSIONS, RunMode.OBSERVATION
+        )
+        is True
+    )
 
 
 def test_action_not_blocked_in_active():
     d = Dispatcher()
-    assert d._action_blocked_by_mode(ResponseAction.KILL_PROCESS, RunMode.ACTIVE) is False
+    assert (
+        d._action_blocked_by_mode(ResponseAction.KILL_PROCESS, RunMode.ACTIVE) is False
+    )
     assert d._action_blocked_by_mode(ResponseAction.ALERT, RunMode.ACTIVE) is False
-    assert d._action_blocked_by_mode(ResponseAction.BLOCK_NETWORK, RunMode.ACTIVE) is False
+    assert (
+        d._action_blocked_by_mode(ResponseAction.BLOCK_NETWORK, RunMode.ACTIVE) is False
+    )
 
 
 def test_log_only_allowed_in_all_modes():
     d = Dispatcher()
     assert d._action_blocked_by_mode(ResponseAction.LOG_ONLY, RunMode.DRY_RUN) is False
-    assert d._action_blocked_by_mode(ResponseAction.LOG_ONLY, RunMode.OBSERVATION) is False
+    assert (
+        d._action_blocked_by_mode(ResponseAction.LOG_ONLY, RunMode.OBSERVATION) is False
+    )
     assert d._action_blocked_by_mode(ResponseAction.LOG_ONLY, RunMode.ACTIVE) is False
 
 
@@ -84,11 +136,18 @@ def test_alert_allowed_in_all_modes():
 
 def test_collect_forensics_allowed_in_all_modes():
     d = Dispatcher()
-    assert d._action_blocked_by_mode(ResponseAction.COLLECT_FORENSICS, RunMode.DRY_RUN) is False
-    assert d._action_blocked_by_mode(ResponseAction.COLLECT_FORENSICS, RunMode.OBSERVATION) is False
+    assert (
+        d._action_blocked_by_mode(ResponseAction.COLLECT_FORENSICS, RunMode.DRY_RUN)
+        is False
+    )
+    assert (
+        d._action_blocked_by_mode(ResponseAction.COLLECT_FORENSICS, RunMode.OBSERVATION)
+        is False
+    )
 
 
 # ---------- execute ----------
+
 
 def test_log_only_action():
     async def _run():
@@ -110,6 +169,7 @@ def test_alert_action():
 
 def test_execute_multiple_actions():
     """execute() обрабатывает несколько действий последовательно."""
+
     async def _run():
         d = Dispatcher()
         decision = _decision((ResponseAction.LOG_ONLY, ResponseAction.ALERT))
@@ -119,6 +179,7 @@ def test_execute_multiple_actions():
 
 
 # ---------- individual handlers ----------
+
 
 def test_isolate_returns_blocked_by_mode_in_observation():
     async def _run():
@@ -295,6 +356,7 @@ def test_kill_user_sessions_no_pid():
 
 # ---------- _log_only ----------
 
+
 def test_log_only_result():
     async def _run():
         d = Dispatcher()
@@ -309,6 +371,7 @@ def test_log_only_result():
 
 # ---------- _extract_ips ----------
 
+
 def test_extract_ips_no_network():
     d = Dispatcher()
     decision = _decision((ResponseAction.BLOCK_NETWORK,))
@@ -318,10 +381,22 @@ def test_extract_ips_no_network():
 
 def test_extract_ips_with_connections():
     d = Dispatcher()
-    net = NetworkInfo(connections=(
-        NetworkConnection(local_addr="10.0.0.1", local_port=22, remote_addr="192.168.1.100", remote_port=55000),
-        NetworkConnection(local_addr="10.0.0.1", local_port=22, remote_addr="10.0.0.50", remote_port=55001),
-    ))
+    net = NetworkInfo(
+        connections=(
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=22,
+                remote_addr="192.168.1.100",
+                remote_port=55000,
+            ),
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=22,
+                remote_addr="10.0.0.50",
+                remote_port=55001,
+            ),
+        )
+    )
     ctx = Context(event=_event(), threat_score=1.0, network=net)
     decision = _decision((ResponseAction.BLOCK_NETWORK,), context=ctx)
     ips = d._extract_ips(decision)
@@ -331,11 +406,28 @@ def test_extract_ips_with_connections():
 
 def test_extract_ips_skips_loopback():
     d = Dispatcher()
-    net = NetworkInfo(connections=(
-        NetworkConnection(local_addr="10.0.0.1", local_port=80, remote_addr="127.0.0.1", remote_port=1234),
-        NetworkConnection(local_addr="10.0.0.1", local_port=80, remote_addr="::1", remote_port=1235),
-        NetworkConnection(local_addr="10.0.0.1", local_port=80, remote_addr="0.0.0.0", remote_port=1236),
-    ))
+    net = NetworkInfo(
+        connections=(
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=80,
+                remote_addr="127.0.0.1",
+                remote_port=1234,
+            ),
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=80,
+                remote_addr="::1",
+                remote_port=1235,
+            ),
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=80,
+                remote_addr="0.0.0.0",
+                remote_port=1236,
+            ),
+        )
+    )
     ctx = Context(event=_event(), threat_score=1.0, network=net)
     decision = _decision((ResponseAction.BLOCK_NETWORK,), context=ctx)
     ips = d._extract_ips(decision)
@@ -344,10 +436,22 @@ def test_extract_ips_skips_loopback():
 
 def test_extract_ips_deduplicates():
     d = Dispatcher()
-    net = NetworkInfo(connections=(
-        NetworkConnection(local_addr="10.0.0.1", local_port=22, remote_addr="192.168.1.1", remote_port=100),
-        NetworkConnection(local_addr="10.0.0.1", local_port=80, remote_addr="192.168.1.1", remote_port=200),
-    ))
+    net = NetworkInfo(
+        connections=(
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=22,
+                remote_addr="192.168.1.1",
+                remote_port=100,
+            ),
+            NetworkConnection(
+                local_addr="10.0.0.1",
+                local_port=80,
+                remote_addr="192.168.1.1",
+                remote_port=200,
+            ),
+        )
+    )
     ctx = Context(event=_event(), threat_score=1.0, network=net)
     decision = _decision((ResponseAction.BLOCK_NETWORK,), context=ctx)
     ips = d._extract_ips(decision)
@@ -355,6 +459,7 @@ def test_extract_ips_deduplicates():
 
 
 # ---------- handlers coverage ----------
+
 
 def test_all_response_actions_have_handlers():
     """Все ResponseAction имеют обработчик в Dispatcher."""

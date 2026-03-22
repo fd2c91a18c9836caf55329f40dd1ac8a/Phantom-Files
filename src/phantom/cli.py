@@ -24,15 +24,25 @@ logger = logging.getLogger("phantom.cli")
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Phantom control utility")
-    parser.add_argument("--config", default="config/phantom.yaml", help="Path to phantom config")
+    parser.add_argument(
+        "--config", default="config/phantom.yaml", help="Path to phantom config"
+    )
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("validate", help="Validate configuration and exit")
     prod = sub.add_parser("prod-check", help="Run production readiness checks")
-    prod.add_argument("--service", default="deploy/phantom.service", help="Path to systemd unit file")
+    prod.add_argument(
+        "--service", default="deploy/phantom.service", help="Path to systemd unit file"
+    )
     prod.add_argument("--json", action="store_true", help="Output JSON")
-    boot = sub.add_parser("bootstrap", help="Create phantom user/groups and directories")
-    boot.add_argument("--dry-run", action="store_true", help="Print planned actions without changing system")
+    boot = sub.add_parser(
+        "bootstrap", help="Create phantom user/groups and directories"
+    )
+    boot.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print planned actions without changing system",
+    )
 
     sub.add_parser("run-once", help="Start orchestrator once (without sensors)")
 
@@ -40,7 +50,9 @@ def _build_parser() -> argparse.ArgumentParser:
     mode_sub = mode_parser.add_subparsers(dest="mode_cmd")
     mode_sub.add_parser("get", help="Show current mode")
     mode_set = mode_sub.add_parser("set", help="Set daemon mode (requires root)")
-    mode_set.add_argument("value", choices=["active", "observation", "dry_run"], help="Target mode")
+    mode_set.add_argument(
+        "value", choices=["active", "observation", "dry_run"], help="Target mode"
+    )
 
     tpl = sub.add_parser("templates", help="Template store operations")
     tpl_sub = tpl.add_subparsers(dest="templates_cmd")
@@ -58,9 +70,15 @@ def _build_parser() -> argparse.ArgumentParser:
     tpl_show = tpl_sub.add_parser("show", help="Show template details")
     tpl_show.add_argument("--name", required=True, help="Template name")
 
-    tpl_remove = tpl_sub.add_parser("remove", help="Remove template or specific version")
+    tpl_remove = tpl_sub.add_parser(
+        "remove", help="Remove template or specific version"
+    )
     tpl_remove.add_argument("--name", required=True, help="Template name")
-    tpl_remove.add_argument("--version", default=None, help="Specific version to remove (omit to remove all)")
+    tpl_remove.add_argument(
+        "--version",
+        default=None,
+        help="Specific version to remove (omit to remove all)",
+    )
 
     return parser
 
@@ -127,7 +145,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "bootstrap":
         try:
-            actions = bootstrap(config_path=args.config, plan=BootstrapPlan(), dry_run=bool(args.dry_run))
+            actions = bootstrap(
+                config_path=args.config,
+                plan=BootstrapPlan(),
+                dry_run=bool(args.dry_run),
+            )
             for line in actions:
                 print(line)
             return 0
@@ -136,7 +158,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if args.command == "prod-check":
-        return run_prod_readiness_check(config_path=args.config, service_path=args.service, json_output=bool(args.json))
+        return run_prod_readiness_check(
+            config_path=args.config,
+            service_path=args.service,
+            json_output=bool(args.json),
+        )
 
     if args.command == "run-once":
         orch = create_orchestrator(args.config)
@@ -159,10 +185,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.mode_cmd == "set":
             # Смена mode требует root-привилегий
             if os.geteuid() != 0:
-                print("ERROR: mode change requires root privileges (sudo phantomctl mode set ...)")
+                print(
+                    "ERROR: mode change requires root privileges (sudo phantomctl mode set ...)"
+                )
                 return 1
             import yaml as _yaml
             from pathlib import Path as _Path
+
             config_path = args.config
             p = _Path(config_path)
             if not p.exists():
@@ -174,16 +203,22 @@ def main(argv: list[str] | None = None) -> int:
                     data = _yaml.safe_load(fh.read())
                     if not isinstance(data, dict):
                         data = {}
-                    if "orchestrator" not in data or not isinstance(data["orchestrator"], dict):
+                    if "orchestrator" not in data or not isinstance(
+                        data["orchestrator"], dict
+                    ):
                         data["orchestrator"] = {}
                     old_mode = data["orchestrator"].get("mode", "active")
                     new_mode = args.value
                     data["orchestrator"]["mode"] = new_mode
                     fh.seek(0)
                     fh.truncate()
-                    fh.write(_yaml.safe_dump(data, sort_keys=False, default_flow_style=False))
+                    fh.write(
+                        _yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
+                    )
                 print(f"Mode changed: {old_mode} -> {new_mode}")
-                print("Restart the daemon or send SIGHUP to apply: kill -HUP $(pidof phantomd)")
+                print(
+                    "Restart the daemon or send SIGHUP to apply: kill -HUP $(pidof phantomd)"
+                )
                 return 0
             except Exception as exc:
                 print(f"ERROR: failed to change mode: {exc}")
@@ -194,7 +229,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "templates":
         role = _resolve_local_role()
         cfg = get_config(args.config)
-        user_root = str(cfg.get("paths", {}).get("user_templates_dir", "/etc/phantom/templates"))
+        user_root = str(
+            cfg.get("paths", {}).get("user_templates_dir", "/etc/phantom/templates")
+        )
         store = TemplateStore(user_root)
 
         if args.templates_cmd == "list":

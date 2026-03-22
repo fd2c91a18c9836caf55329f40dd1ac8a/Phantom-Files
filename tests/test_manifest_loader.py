@@ -46,7 +46,16 @@ def test_manifest_loader_rejects_bad_format(tmp_path):
 def test_manifest_loader_blocks_absolute_output(tmp_path):
     path = _write_manifest(
         tmp_path,
-        {"traps": [{"id": "trap", "template": "t", "output": "/etc/passwd", "format": "text"}]},
+        {
+            "traps": [
+                {
+                    "id": "trap",
+                    "template": "t",
+                    "output": "/etc/passwd",
+                    "format": "text",
+                }
+            ]
+        },
     )
     loader = ManifestLoader(path)
     tasks = loader.load_tasks()
@@ -56,7 +65,11 @@ def test_manifest_loader_blocks_absolute_output(tmp_path):
 def test_manifest_loader_blocks_path_traversal(tmp_path):
     path = _write_manifest(
         tmp_path,
-        {"traps": [{"id": "trap", "template": "../t", "output": "a", "format": "text"}]},
+        {
+            "traps": [
+                {"id": "trap", "template": "../t", "output": "a", "format": "text"}
+            ]
+        },
     )
     loader = ManifestLoader(path)
     tasks = loader.load_tasks()

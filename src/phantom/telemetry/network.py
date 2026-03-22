@@ -56,4 +56,3 @@ class NetworkCollector:
             state=first.state,
             connections=tuple(connections),
         )
-

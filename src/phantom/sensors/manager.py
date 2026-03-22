@@ -48,7 +48,9 @@ class SensorManager:
             try:
                 self._loop = asyncio.get_running_loop()
             except RuntimeError as exc:
-                raise RuntimeError("SensorManager requires a running event loop") from exc
+                raise RuntimeError(
+                    "SensorManager requires a running event loop"
+                ) from exc
         self._mode = mode
         self._sensor: Sensor | None = None
         self._aux_sensors: list[Sensor] = []
@@ -60,11 +62,19 @@ class SensorManager:
     @property
     def health(self) -> SensorHealth:
         if self._sensor is None:
-            return SensorHealth(name="none", running=False, degraded=True, reason="not started")
+            return SensorHealth(
+                name="none", running=False, degraded=True, reason="not started"
+            )
         primary = self._sensor.health
         aux_health = [sensor.health for sensor in self._aux_sensors]
-        degraded = self._degraded or primary.degraded or any(item.degraded for item in aux_health)
-        running = primary.running and all(item.running for item in aux_health if not item.degraded)
+        degraded = (
+            self._degraded
+            or primary.degraded
+            or any(item.degraded for item in aux_health)
+        )
+        running = primary.running and all(
+            item.running for item in aux_health if not item.degraded
+        )
         reason_parts: list[str] = []
         if self._degraded_reason:
             reason_parts.append(self._degraded_reason)
@@ -92,7 +102,9 @@ class SensorManager:
         return {}
 
     def start(self) -> None:
-        sensors_cfg = self._config.get("sensors", {}) if hasattr(self._config, "get") else {}
+        sensors_cfg = (
+            self._config.get("sensors", {}) if hasattr(self._config, "get") else {}
+        )
         prefer = str(sensors_cfg.get("driver", "auto")).lower()
         ebpf_enabled = bool(sensors_cfg.get("ebpf_enabled", True))
         self._degraded = False
@@ -132,16 +144,21 @@ class SensorManager:
             if lsm_ok:
                 try:
                     ebpf = EbpfSensor(
-                        self._config, self._callback, self._registry,
+                        self._config,
+                        self._callback,
+                        self._registry,
                         permission_callback=self._permission_callback,
-                        loop=self._loop, mode=self._mode,
+                        loop=self._loop,
+                        mode=self._mode,
                     )
                     ebpf.start()
                     if ebpf.lsm_active:
                         self._sensor = ebpf
                         self._ebpf_sensor = ebpf
                         ebpf_started = True
-                        logger.info("Primary sensor: eBPF LSM (kernel-level blocking active)")
+                        logger.info(
+                            "Primary sensor: eBPF LSM (kernel-level blocking active)"
+                        )
                     else:
                         ebpf.stop()
                 except Exception as exc:
@@ -181,8 +198,11 @@ class SensorManager:
         if ebpf_enabled and not ebpf_started:
             try:
                 ebpf = EbpfSensor(
-                    self._config, self._callback, self._registry,
-                    loop=self._loop, mode=self._mode,
+                    self._config,
+                    self._callback,
+                    self._registry,
+                    loop=self._loop,
+                    mode=self._mode,
                 )
                 ebpf.start()
                 self._ebpf_sensor = ebpf
@@ -198,7 +218,9 @@ class SensorManager:
                     self._mode_name = "ebpf_degraded"
                     self._degraded = True
                     self._degraded_reason = "ebpf_tracepoints_only_no_blocking"
-                    logger.warning("Primary sensor: eBPF tracepoints only (degraded, no blocking)")
+                    logger.warning(
+                        "Primary sensor: eBPF tracepoints only (degraded, no blocking)"
+                    )
                     return
 
             except Exception as exc:
@@ -223,9 +245,12 @@ class SensorManager:
         """Принудительный запуск eBPF как primary."""
         try:
             ebpf = EbpfSensor(
-                self._config, self._callback, self._registry,
+                self._config,
+                self._callback,
+                self._registry,
                 permission_callback=self._permission_callback,
-                loop=self._loop, mode=self._mode,
+                loop=self._loop,
+                mode=self._mode,
             )
             ebpf.start()
             self._sensor = ebpf
@@ -238,13 +263,17 @@ class SensorManager:
                 self._mode_name = "ebpf_degraded"
                 self._degraded = True
                 self._degraded_reason = "ebpf_tracepoints_only_no_blocking"
-                logger.warning("Primary sensor: eBPF tracepoints only (LSM unavailable)")
+                logger.warning(
+                    "Primary sensor: eBPF tracepoints only (LSM unavailable)"
+                )
         except Exception as exc:
             logger.critical("eBPF forced start failed: %s", exc)
             self._start_inotify_fallback()
 
     def _start_fanotify_primary(
-        self, sensors_cfg: Mapping[str, Any], ebpf_enabled: bool,
+        self,
+        sensors_cfg: Mapping[str, Any],
+        ebpf_enabled: bool,
     ) -> None:
         """Принудительный запуск fanotify как primary."""
         try:
@@ -273,8 +302,11 @@ class SensorManager:
         """Запуск eBPF как вспомогательного сенсора."""
         try:
             ebpf = EbpfSensor(
-                self._config, self._callback, self._registry,
-                loop=self._loop, mode=self._mode,
+                self._config,
+                self._callback,
+                self._registry,
+                loop=self._loop,
+                mode=self._mode,
             )
             ebpf.start()
             self._aux_sensors.append(ebpf)
@@ -299,7 +331,10 @@ class SensorManager:
         """Inotify — последний запасной вариант."""
         try:
             inotify = InotifySensor(
-                self._config, self._callback, self._registry, loop=self._loop,
+                self._config,
+                self._callback,
+                self._registry,
+                loop=self._loop,
             )
             inotify.start()
         except Exception as exc:

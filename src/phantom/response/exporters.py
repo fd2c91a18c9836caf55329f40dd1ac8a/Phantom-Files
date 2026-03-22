@@ -96,7 +96,11 @@ def _is_safe_url_runtime(url: str) -> bool:
     # Accepted risk: re-resolving in urllib would require custom resolver hook.
     # Defense: _NoRedirect handler prevents redirect-based rebinding.
     try:
-        addr_infos = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+        addr_infos = socket.getaddrinfo(
+            hostname,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            proto=socket.IPPROTO_TCP,
+        )
     except socket.gaierror:
         return False
     for _family, _, _, _, sockaddr in addr_infos:
@@ -133,15 +137,21 @@ def _retry_request(req: request.Request, max_retries: int = _MAX_RETRIES) -> boo
                     return True
                 logger.warning(
                     "HTTP %s (attempt %d/%d) url=%s",
-                    resp.status, attempt + 1, max_retries + 1, safe_url,
+                    resp.status,
+                    attempt + 1,
+                    max_retries + 1,
+                    safe_url,
                 )
         except error.URLError as exc:
             logger.warning(
                 "HTTP error (attempt %d/%d) url=%s: %s",
-                attempt + 1, max_retries + 1, safe_url, exc,
+                attempt + 1,
+                max_retries + 1,
+                safe_url,
+                exc,
             )
         if attempt < max_retries:
-            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+            delay = _RETRY_BASE_DELAY * (2**attempt)
             time.sleep(delay)
     return False
 
@@ -165,8 +175,12 @@ class AlertExporter:
                 logger.error("Webhook URL blocked (SSRF): %s", url)
 
         self._telegram_enabled = bool(integrations.get("telegram_enabled", False))
-        self._telegram_token_env = str(integrations.get("telegram_bot_token_env", "PHANTOM_TELEGRAM_BOT_TOKEN"))
-        self._telegram_chat_id_env = str(integrations.get("telegram_chat_id_env", "PHANTOM_TELEGRAM_CHAT_ID"))
+        self._telegram_token_env = str(
+            integrations.get("telegram_bot_token_env", "PHANTOM_TELEGRAM_BOT_TOKEN")
+        )
+        self._telegram_chat_id_env = str(
+            integrations.get("telegram_chat_id_env", "PHANTOM_TELEGRAM_CHAT_ID")
+        )
 
         self._syslog_enabled = bool(integrations.get("syslog_enabled", False))
         self._syslog_address = integrations.get("syslog_address", "/dev/log")
@@ -246,7 +260,9 @@ class AlertExporter:
             f"pid={event.get('process_pid')}\n"
             f"sensor={event.get('source_sensor')}"
         )
-        body = parse.urlencode({"chat_id": chat_id, "text": message[:3900]}).encode("utf-8")
+        body = parse.urlencode({"chat_id": chat_id, "text": message[:3900]}).encode(
+            "utf-8"
+        )
         raw_url = f"https://api.telegram.org/bot{token}/sendMessage"
         try:
             req = request.Request(url=raw_url, data=body, method="POST")
@@ -304,6 +320,7 @@ class AlertExporter:
         try:
             self._queue_path.parent.mkdir(parents=True, exist_ok=True)
             import tempfile as _tempfile
+
             fd, tmp_path = _tempfile.mkstemp(
                 dir=str(self._queue_path.parent), suffix=".tmp"
             )
@@ -345,7 +362,9 @@ class AlertExporter:
             if isinstance(address, (list, tuple)) and len(address) == 2:
                 host = str(address[0])
                 port = int(address[1])
-                return SysLogHandler(address=(host, port), facility=self._syslog_facility)
+                return SysLogHandler(
+                    address=(host, port), facility=self._syslog_facility
+                )
             host = "127.0.0.1"
             port = 514
             return SysLogHandler(address=(host, port), facility=self._syslog_facility)

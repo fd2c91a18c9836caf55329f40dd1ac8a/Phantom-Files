@@ -2,10 +2,15 @@
 
 from pathlib import Path
 
-from phantom.response.enforcement import CommandResult, NetworkEnforcer, ProcessEnforcer, CgroupEbpfIsolator
-
+from phantom.response.enforcement import (
+    CommandResult,
+    NetworkEnforcer,
+    ProcessEnforcer,
+    CgroupEbpfIsolator,
+)
 
 # ---------- PID-валидация в ProcessEnforcer ----------
+
 
 def test_process_enforcer_rejects_pid_0():
     pe = ProcessEnforcer()
@@ -30,6 +35,7 @@ def test_process_enforcer_nonexistent_pid():
 
 # ---------- PID-валидация в CgroupEbpfIsolator ----------
 
+
 def test_cgroup_rejects_pid_0():
     iso = CgroupEbpfIsolator()
     assert iso.isolate_pid(0) is False
@@ -46,6 +52,7 @@ def test_cgroup_rejects_negative_pid():
 
 
 # ---------- IP set selection ----------
+
 
 def test_ipv4_set_selection():
     ne = NetworkEnforcer()
@@ -73,6 +80,7 @@ def test_ip_loopback_v6():
 
 
 # ---------- UID resolution (мок /proc недоступен в тестовой среде) ----------
+
 
 def test_pid_uid_nonexistent():
     ne = NetworkEnforcer()

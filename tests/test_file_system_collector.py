@@ -26,7 +26,9 @@ def test_file_system_collector_trap_match(tmp_path, monkeypatch):
     reg_path = tmp_path / "registry.json"
     reg.export_json(str(reg_path))
 
-    monkeypatch.setattr(fs, "get_config", lambda: {"paths": {"trap_registry_file": str(reg_path)}})
+    monkeypatch.setattr(
+        fs, "get_config", lambda: {"paths": {"trap_registry_file": str(reg_path)}}
+    )
     collector = fs.FileSystemCollector()
     info = collector._collect_sync(str(trap_file))
     assert info is not None
@@ -35,6 +37,8 @@ def test_file_system_collector_trap_match(tmp_path, monkeypatch):
 
 
 def test_file_system_collector_missing_file(monkeypatch):
-    monkeypatch.setattr(fs, "get_config", lambda: {"paths": {"trap_registry_file": "/nonexistent.json"}})
+    monkeypatch.setattr(
+        fs, "get_config", lambda: {"paths": {"trap_registry_file": "/nonexistent.json"}}
+    )
     collector = fs.FileSystemCollector()
     assert collector._collect_sync("/nonexistent/path") is None

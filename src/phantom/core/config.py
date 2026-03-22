@@ -52,10 +52,13 @@ logger = logging.getLogger("phantom.config")
 # EXCEPTIONS
 # =============================================================================
 
+
 class ConfigError(Exception):
     """Базовое исключение для ошибок конфигурации."""
-    
-    def __init__(self, message: str, path: Optional[str] = None, key: Optional[str] = None):
+
+    def __init__(
+        self, message: str, path: Optional[str] = None, key: Optional[str] = None
+    ):
         self.path = path
         self.key = key
         super().__init__(message)
@@ -64,6 +67,7 @@ class ConfigError(Exception):
 # =============================================================================
 # CONSTANTS
 # =============================================================================
+
 
 # Автоопределение корня проекта
 # Эвристика: ищем pyproject.toml вверх по дереву (до 5 уровней)
@@ -76,10 +80,11 @@ def _find_project_root() -> Path:
         if current == current.parent:  # Достигли filesystem root
             break
         current = current.parent
-    
+
     # Fallback: используем cwd (но предупреждаем)
     logger.debug("pyproject.toml not found, using cwd as project root")
     return Path.cwd()
+
 
 PROJECT_ROOT: Final[Path] = _find_project_root()
 
@@ -120,7 +125,7 @@ REQUIRED_PATHS: Final[Set[str]] = {"logs_dir", "traps_dir"}
 
 # ENV overrides
 ENV_PREFIX: Final[str] = "PHANTOM_"
-ENV_VAR_PATTERN: Final[re.Pattern] = re.compile(r'\$\{([^}:]+)(?::([^}]+))?\}')
+ENV_VAR_PATTERN: Final[re.Pattern] = re.compile(r"\$\{([^}:]+)(?::([^}]+))?\}")
 
 # Профили окружения (PHANTOM_PROFILE=production)
 DEFAULT_PROFILE: Final[str] = "default"
@@ -130,6 +135,7 @@ DEFAULT_PROFILE: Final[str] = "default"
 # =============================================================================
 
 _CONFIG_CACHE: Optional[MappingProxyType] = None
+_CONFIG_CACHE_KEY: tuple[str | None, str | None] | None = None
 _CONFIG_LOCK = threading.Lock()
 _PATH_CACHE: Dict[str, str] = {}
 
@@ -138,25 +144,24 @@ _PATH_CACHE: Dict[str, str] = {}
 # PUBLIC API
 # =============================================================================
 
+
 def get_config(
-    path: Optional[str] = None,
-    profile: Optional[str] = None,
-    reload: bool = False
+    path: Optional[str] = None, profile: Optional[str] = None, reload: bool = False
 ) -> MappingProxyType:
     """
     Получает конфигурацию (Thread-Safe Singleton).
-    
+
     Args:
         path: Путь к файлу конфигурации. Если None, ищется автоматически.
         profile: Профиль окружения (default/dev/prod). Если None, читается из PHANTOM_PROFILE.
         reload: Если True, принудительно перезагружает конфиг (для тестов).
-    
+
     Returns:
         Неизменяемый словарь с конфигурацией (MappingProxyType).
-    
+
     Raises:
         ConfigError: При ошибках загрузки, валидации или I/O.
-    
+
     Thread Safety:
         Первый вызов блокирует через threading.Lock.
         Последующие вызовы возвращают кэшированный объект без блокировки.
@@ -165,60 +170,69 @@ def get_config(
 
     # R3-M2 fix: cache key включает path и profile,
     # чтобы вызов с другими параметрами не возвращал старый кэш
-    request_key = (path, profile)
+    resolved_path = path if path is not None else _get_default_config_path()
+    resolved_profile = (
+        profile
+        if profile is not None
+        else os.getenv("PHANTOM_PROFILE", DEFAULT_PROFILE)
+    )
+    request_key = (resolved_path, resolved_profile)
     if _CONFIG_CACHE is not None and not reload:
-        if not hasattr(get_config, "_cache_key") or get_config._cache_key == request_key or request_key == (None, None):
+        if (path is None and profile is None) or _CONFIG_CACHE_KEY == request_key:
             return _CONFIG_CACHE
-    
+
     # Slow path: загрузка с блокировкой
     with _CONFIG_LOCK:
         # Double-check внутри lock (другой поток мог загрузить)
         if _CONFIG_CACHE is not None and not reload:
-            return _CONFIG_CACHE
+            if (path is None and profile is None) or _CONFIG_CACHE_KEY == request_key:
+                return _CONFIG_CACHE
         if reload:
             _PATH_CACHE.clear()
-        
+
         if path is None:
-            path = _get_default_config_path()
-        
+            path = resolved_path
+
         if profile is None:
-            profile = os.getenv("PHANTOM_PROFILE", DEFAULT_PROFILE)
-        
+            profile = resolved_profile
+
         logger.info(f"Loading configuration from {path} (profile: {profile})")
-        
+
         raw_config = _load_and_process_config(path)
         final_config = _apply_profile(raw_config, profile)
-        
+
         # Глубокое замораживание для immutability
         _CONFIG_CACHE = _deep_freeze(final_config)
         # R3-M2 fix: сохраняем ключ кэша
-        get_config._cache_key = (path, profile)
+        _CONFIG_CACHE_KEY = (path, profile)
 
         return _CONFIG_CACHE
 
 
-def get_path(name: str, *, ensure_exists: bool = True, ensure_writable: bool = True) -> str:
+def get_path(
+    name: str, *, ensure_exists: bool = True, ensure_writable: bool = True
+) -> str:
     """
     Безопасное получение абсолютного пути из конфигурации.
-    
+
     Особенности:
       - Резолвит относительные пути от PROJECT_ROOT.
       - Поддерживает ~ (home directory).
       - Кэширует результаты для performance.
       - Создаёт директории для *_dir ключей.
       - Проверяет права записи для критичных путей.
-    
+
     Args:
         name: Имя пути из секции 'paths'.
         ensure_exists: Если True, создаёт директорию (для *_dir).
         ensure_writable: Если True, проверяет права записи.
-    
+
     Returns:
         Абсолютный путь (строка).
-    
+
     Raises:
         ConfigError: Если путь не найден, недоступен или не writable.
-    
+
     Examples:
         >>> get_path("logs_dir")
         '/var/log/phantom'
@@ -229,40 +243,39 @@ def get_path(name: str, *, ensure_exists: bool = True, ensure_writable: bool = T
     cache_key = f"{name}:{ensure_exists}:{ensure_writable}"
     if cache_key in _PATH_CACHE:
         return _PATH_CACHE[cache_key]
-    
+
     config = get_config()
     paths = config.get("paths", {})
-    
+
     if name not in paths:
         raise ConfigError(
-            f"Path '{name}' not found in configuration",
-            key=f"paths.{name}"
+            f"Path '{name}' not found in configuration", key=f"paths.{name}"
         )
-    
+
     raw_path = paths[name]
-    
+
     if not isinstance(raw_path, str):
         raise ConfigError(
             f"Path '{name}' must be a string, got {type(raw_path).__name__}",
-            key=f"paths.{name}"
+            key=f"paths.{name}",
         )
-    
+
     # Resolve path
     path_obj = Path(raw_path)
-    
+
     # Handle ~ expansion
     if raw_path.startswith("~/"):
         path_obj = Path(os.path.expanduser(raw_path))
-    
+
     # Resolve relative paths from PROJECT_ROOT
     if not path_obj.is_absolute():
         path_obj = PROJECT_ROOT / path_obj
-    
+
     final_path = path_obj.resolve()
-    
+
     # Heuristic: создаём директории для ключей, оканчивающихся на _dir или templates
     is_directory = name.endswith("_dir") or name in ("templates",)
-    
+
     if is_directory and ensure_exists:
         try:
             final_path.mkdir(parents=True, exist_ok=True)
@@ -270,18 +283,18 @@ def get_path(name: str, *, ensure_exists: bool = True, ensure_writable: bool = T
             raise ConfigError(
                 f"Cannot create directory {final_path}: {e}. "
                 "Check permissions or adjust configuration.",
-                path=str(final_path)
+                path=str(final_path),
             )
-    
+
     # Write access check (для критичных директорий)
     if is_directory and ensure_writable:
         if not os.access(final_path, os.W_OK):
             raise ConfigError(
                 f"Directory {final_path} is not writable by current user (UID {os.getuid()}). "
                 "Run daemon with appropriate permissions or change configuration.",
-                path=str(final_path)
+                path=str(final_path),
             )
-    
+
     result = str(final_path)
     _PATH_CACHE[cache_key] = result
     return result
@@ -290,15 +303,15 @@ def get_path(name: str, *, ensure_exists: bool = True, ensure_writable: bool = T
 def validate_config_for_daemon() -> None:
     """
     Выполняет комплексную проверку конфигурации перед запуском демона.
-    
+
     Проверяет:
       - Все обязательные пути существуют и доступны для записи.
       - Секции orchestrator, sensors присутствуют (если не dev mode).
       - Численные параметры в допустимых пределах.
-    
+
     Raises:
         ConfigError: При обнаружении проблем.
-    
+
     Usage:
         # В daemon.py перед daemonize()
         try:
@@ -308,7 +321,7 @@ def validate_config_for_daemon() -> None:
             sys.exit(1)
     """
     config = get_config()
-    
+
     # 1. Проверка обязательных секций для daemon mode
     if os.getenv("PHANTOM_MODE") != "dev":
         required_for_daemon = {"orchestrator", "sensors"}
@@ -318,7 +331,7 @@ def validate_config_for_daemon() -> None:
                 f"Daemon mode requires sections: {', '.join(missing)}. "
                 "Add them to config or set PHANTOM_MODE=dev for testing."
             )
-    
+
     # 2. Проверка критичных путей
     for path_name in REQUIRED_PATHS:
         try:
@@ -327,7 +340,7 @@ def validate_config_for_daemon() -> None:
         except ConfigError as e:
             raise ConfigError(
                 f"Critical path '{path_name}' validation failed: {e}",
-                key=f"paths.{path_name}"
+                key=f"paths.{path_name}",
             )
 
     # Optional but operationally required files in v2
@@ -337,7 +350,9 @@ def validate_config_for_daemon() -> None:
             continue
         value = config["paths"][name]
         if not isinstance(value, str) or not value.strip():
-            raise ConfigError(f"paths.{name} must be non-empty string", key=f"paths.{name}")
+            raise ConfigError(
+                f"paths.{name} must be non-empty string", key=f"paths.{name}"
+            )
 
     if "sensors" in config:
         sensors = config["sensors"]
@@ -394,36 +409,40 @@ def validate_config_for_daemon() -> None:
             raise ConfigError("templates section must be a mapping", key="templates")
         globals_data = templates.get("globals", templates.get("global_vars", {}))
         if globals_data is not None and not isinstance(globals_data, Mapping):
-            raise ConfigError("templates.globals must be a mapping", key="templates.globals")
+            raise ConfigError(
+                "templates.globals must be a mapping", key="templates.globals"
+            )
         datasets = templates.get("datasets", [])
         if datasets is not None:
             if not isinstance(datasets, (list, tuple)):
-                raise ConfigError("templates.datasets must be a list", key="templates.datasets")
+                raise ConfigError(
+                    "templates.datasets must be a list", key="templates.datasets"
+                )
             for idx, item in enumerate(datasets):
                 if not isinstance(item, str) or not item.strip():
                     raise ConfigError(
                         f"templates.datasets[{idx}] must be a non-empty string path",
                         key="templates.datasets",
                     )
-    
+
     # 3. Валидация численных параметров orchestrator (если есть)
     if "orchestrator" in config:
         orch = config["orchestrator"]
-        
+
         if "worker_count" in orch:
             val = orch["worker_count"]
             if not isinstance(val, int) or not 1 <= val <= 128:
                 raise ConfigError(
                     f"orchestrator.worker_count must be 1-128, got {val}",
-                    key="orchestrator.worker_count"
+                    key="orchestrator.worker_count",
                 )
-        
+
         if "event_queue_size" in orch:
             val = orch["event_queue_size"]
             if not isinstance(val, int) or val < 100:
                 raise ConfigError(
                     f"orchestrator.event_queue_size must be >= 100, got {val}",
-                    key="orchestrator.event_queue_size"
+                    key="orchestrator.event_queue_size",
                 )
         if "mode" in orch:
             mode = str(orch["mode"]).lower()
@@ -446,7 +465,7 @@ def validate_config_for_daemon() -> None:
                         f"orchestrator.{ttl_key} must be >= 0",
                         key=f"orchestrator.{ttl_key}",
                     )
-    
+
     logger.info("Configuration validation passed ✓")
 
 
@@ -458,7 +477,7 @@ def get_profile() -> str:
 def clear_cache() -> None:
     """
     Очищает кэш конфигурации и путей.
-    
+
     Полезно для тестов и hot-reload в dev mode.
     Thread-safe.
     """
@@ -473,10 +492,11 @@ def clear_cache() -> None:
 # INTERNAL: CONFIG LOADING
 # =============================================================================
 
+
 def _get_default_config_path() -> str:
     """
     Определяет путь к конфигу с чётким приоритетом.
-    
+
     Приоритет (по убыванию):
       1. PHANTOM_CONFIG_PATH environment variable
       2. ./config/phantom.yaml (относительно PROJECT_ROOT)
@@ -487,19 +507,19 @@ def _get_default_config_path() -> str:
     env_path = os.getenv("PHANTOM_CONFIG_PATH")
     if env_path:
         return env_path
-    
+
     # 2. Project-local config (dev mode)
     dev_path = PROJECT_ROOT / "config" / "phantom.yaml"
     if dev_path.exists():
         return str(dev_path)
-    
+
     # 3. System-wide configs (production)
     for sys_path in [
         Path("/etc/phantom/phantom.yaml"),
     ]:
         if sys_path.exists():
             return str(sys_path)
-    
+
     # 4. Fallback (will fail later with clear error)
     return str(dev_path)
 
@@ -507,7 +527,7 @@ def _get_default_config_path() -> str:
 def _load_and_process_config(path: str) -> Dict[str, Any]:
     """
     Загружает конфиг из файла и применяет все трансформации.
-    
+
     Pipeline:
       1. Security checks (size, permissions)
       2. YAML parsing
@@ -518,10 +538,10 @@ def _load_and_process_config(path: str) -> Dict[str, Any]:
     # 1. Existence check
     if not os.path.exists(path):
         raise ConfigError(f"Configuration file not found: {path}", path=path)
-    
+
     # 2. Security checks
     _check_file_security(path)
-    
+
     # 3. Load YAML
     try:
         with open(path, "rt", encoding="utf-8") as f:
@@ -530,50 +550,50 @@ def _load_and_process_config(path: str) -> Dict[str, Any]:
         raise ConfigError(f"Cannot read config file: {e}", path=path)
     except yaml.YAMLError as e:
         raise ConfigError(f"Invalid YAML syntax: {e}", path=path)
-    
+
     if not isinstance(raw_config, dict):
         raise ConfigError(
             f"Configuration root must be a dictionary, got {type(raw_config).__name__}",
-            path=path
+            path=path,
         )
-    
+
     # 4. Variable expansion
     expanded = _recursive_expand_vars(raw_config)
-    
+
     # 5. ENV overrides
     final = _apply_env_overrides(expanded)
-    
+
     # 6. Validation
     _validate_structure(final, path)
-    
+
     return final
 
 
 def _check_file_security(path: str) -> None:
     """
     Проверяет безопасность конфигурационного файла.
-    
+
     Security checks:
       - File size (DoS protection)
       - Ownership (не должен принадлежать другому юзеру кроме root)
       - Permissions (не должен быть world-writable, желательно 0600)
-    
+
     Все проверки — warnings, не errors (для гибкости в dev).
     """
     try:
         stat = os.stat(path)
     except OSError as e:
         raise ConfigError(f"Cannot stat config file: {e}", path=path)
-    
+
     # Size check (hard limit)
     if stat.st_size > MAX_CONFIG_SIZE:
         raise ConfigError(
             f"Config file too large: {stat.st_size} bytes (max {MAX_CONFIG_SIZE})",
-            path=path
+            path=path,
         )
-    
+
     current_uid = os.getuid()
-    
+
     # Ownership check
     if stat.st_uid not in (current_uid, 0):
         logger.warning(
@@ -581,10 +601,10 @@ def _check_file_security(path: str) -> None:
             f"not current user ({current_uid}) or root (0). "
             "This may be a security risk if the file is writable by others."
         )
-    
+
     # Permissions check
     mode = stat.st_mode
-    
+
     # Critical: world-writable (anyone can modify) — REJECT
     if mode & 0o002:
         raise ConfigError(
@@ -592,7 +612,7 @@ def _check_file_security(path: str) -> None:
             "This is a severe security risk. Fix: chmod 600 " + path,
             path=path,
         )
-    
+
     # Warning: group/world readable (может содержать credentials)
     if mode & 0o044:
         logger.warning(
@@ -605,40 +625,41 @@ def _check_file_security(path: str) -> None:
 # INTERNAL: VARIABLE EXPANSION
 # =============================================================================
 
+
 def _expand_value(value: Any) -> Any:
     """
     Раскрывает переменные окружения в строках.
-    
+
     Supported formats:
       - ${VAR} — обязательная переменная (оставляет как есть если не найдена)
       - ${VAR:default} — опциональная с дефолтом
       - ~/path — home directory expansion
-    
+
     Security:
       - Не выполняет shell expansion (безопасно от injection).
       - Не интерпретирует специальные символы.
     """
     if not isinstance(value, str):
         return value
-    
+
     # Home directory expansion
     if value.startswith("~/"):
         value = os.path.expanduser(value)
-    
+
     # Environment variable substitution
     def replace_match(match: re.Match) -> str:
         var_name = match.group(1)
         default_val = match.group(2)
-        
+
         env_val = os.getenv(var_name)
         if env_val is not None:
             return env_val
         if default_val is not None:
             return default_val
-        
+
         # Переменная не найдена — оставляем как есть (видно пользователю)
         return match.group(0)
-    
+
     return ENV_VAR_PATTERN.sub(replace_match, value)
 
 
@@ -656,19 +677,20 @@ def _recursive_expand_vars(data: Any) -> Any:
 # INTERNAL: ENV OVERRIDES
 # =============================================================================
 
+
 def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Применяет 12-factor style overrides из переменных окружения.
-    
+
     Format: PHANTOM_SECTION__KEY__SUBKEY=value
     Example: PHANTOM_ORCHESTRATOR__WORKER_COUNT=8
-    
+
     Type inference:
       - "true"/"false" → bool
       - "123" → int
       - "1.5" → float
       - остальное → str
-    
+
     Optimization:
       Deepcopy происходит только если есть хотя бы один override.
     """
@@ -676,14 +698,17 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
     has_overrides = any(k.startswith(ENV_PREFIX) for k in os.environ)
     if not has_overrides:
         return config
-    
+
     # Slow path: копируем и применяем
     import copy
+
     new_config = copy.deepcopy(config)
-    
+
     # Мета-переменные, не являющиеся config-overrides
     _EXCLUDED_EXACT = {
-        "CONFIG_PATH", "PROFILE", "MODE",
+        "CONFIG_PATH",
+        "PROFILE",
+        "MODE",
     }
     _EXCLUDED_PREFIXES = {
         "API_KEY",
@@ -701,27 +726,29 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         # Parse key path
-        trimmed = env_key[len(ENV_PREFIX):]
+        trimmed = env_key[len(ENV_PREFIX) :]
 
-        if trimmed in _EXCLUDED_EXACT or any(trimmed.startswith(prefix) for prefix in _EXCLUDED_PREFIXES):
+        if trimmed in _EXCLUDED_EXACT or any(
+            trimmed.startswith(prefix) for prefix in _EXCLUDED_PREFIXES
+        ):
             continue
 
         parts = trimmed.split("__")
-        
+
         if not parts:
             continue
-        
+
         # Normalize to lowercase (YAML keys обычно lowercase)
         path_keys = [p.lower() for p in parts]
-        
+
         # Infer type
         typed_val = _infer_type(env_val)
-        
+
         # Set nested value
         _set_nested_value(new_config, path_keys, typed_val)
-        
+
         logger.debug(f"Applied ENV override: {'.'.join(path_keys)}")
-    
+
     return new_config
 
 
@@ -736,25 +763,25 @@ def _infer_type(value: str) -> Any:
       - String: остальное
     """
     lower = value.lower()
-    
+
     # Boolean
     if lower in ("true", "yes", "on"):
         return True
     if lower in ("false", "no", "off"):
         return False
-    
+
     # Integer
     try:
         return int(value)
     except ValueError:
         pass
-    
+
     # Float
     try:
         return float(value)
     except ValueError:
         pass
-    
+
     # String (default)
     return value
 
@@ -762,24 +789,24 @@ def _infer_type(value: str) -> Any:
 def _set_nested_value(config: Dict[str, Any], keys: list[str], value: Any) -> None:
     """
     Безопасно устанавливает значение во вложенном словаре.
-    
+
     Создаёт промежуточные dict'ы если они отсутствуют.
     Игнорирует если на пути встретился не-dict (с warning).
     """
     current = config
-    
+
     for key in keys[:-1]:
         if key not in current:
             current[key] = {}
-        
+
         if not isinstance(current[key], dict):
             logger.warning(
                 f"ENV override failed: '{key}' is not a dict (path: {'.'.join(keys)})"
             )
             return
-        
+
         current = current[key]
-    
+
     current[keys[-1]] = value
 
 
@@ -787,71 +814,74 @@ def _set_nested_value(config: Dict[str, Any], keys: list[str], value: Any) -> No
 # INTERNAL: PROFILE SUPPORT
 # =============================================================================
 
+
 def _apply_profile(config: Dict[str, Any], profile: str) -> Dict[str, Any]:
     """
     Применяет профиль окружения (dev/prod/staging).
-    
+
     Format в YAML:
       default:
         orchestrator:
           worker_count: 4
-      
+
       production:
         orchestrator:
           worker_count: 16
         logging:
           level: WARNING
-    
+
     Логика:
       1. Берём секцию "default" (если есть) как базу.
       2. Мерджим с секцией <profile> (глубокий merge).
       3. Удаляем служебные ключи (default, production, etc).
-    
+
     Args:
         config: Raw конфиг из YAML.
         profile: Имя профиля (default/production/dev/staging).
-    
+
     Returns:
         Конфиг с применённым профилем.
     """
     # Если профилей нет в конфиге — возвращаем как есть
     if profile not in config and DEFAULT_PROFILE not in config:
         return config
-    
+
     # Начинаем с default (если есть)
     import copy
+
     base = copy.deepcopy(config.get(DEFAULT_PROFILE, {}))
-    
+
     # Мерджим с конкретным профилем
     if profile != DEFAULT_PROFILE and profile in config:
         profile_config = config[profile]
         base = _deep_merge(base, profile_config)
-    
+
     # Мерджим с top-level ключами (не являющимися профилями)
     profile_keys = {DEFAULT_PROFILE, "production", "dev", "staging", "test"}
     for key, value in config.items():
         if key not in profile_keys:
             base[key] = value
-    
+
     return base
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     """
     Глубокий merge двух словарей (override имеет приоритет).
-    
+
     Для вложенных dict'ов делает рекурсивный merge.
     Для остальных типов — полная замена.
     """
     import copy
+
     result = copy.deepcopy(base)
-    
+
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _deep_merge(result[key], value)
         else:
             result[key] = copy.deepcopy(value)
-    
+
     return result
 
 
@@ -859,10 +889,11 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 # INTERNAL: VALIDATION
 # =============================================================================
 
+
 def _validate_structure(config: Dict[str, Any], path: str) -> None:
     """
     Валидирует структуру конфига (обязательные секции, типы).
-    
+
     Checks:
       - Наличие обязательных секций (paths).
       - Типы и содержимое критичных секций (paths).
@@ -872,17 +903,16 @@ def _validate_structure(config: Dict[str, Any], path: str) -> None:
     missing = REQUIRED_SECTIONS - config.keys()
     if missing:
         raise ConfigError(
-            f"Missing required sections: {', '.join(sorted(missing))}",
-            path=path
+            f"Missing required sections: {', '.join(sorted(missing))}", path=path
         )
-    
+
     # 2. Optional sections (warning)
     missing_optional = OPTIONAL_SECTIONS - config.keys()
     if missing_optional:
         logger.info(
             f"Optional sections not present (using defaults): {', '.join(sorted(missing_optional))}"
         )
-    
+
     # 3. Validate 'paths' section
     if "paths" in config:
         _validate_paths_section(config["paths"], path)
@@ -892,20 +922,18 @@ def _validate_paths_section(paths: Any, config_path: str) -> None:
     """Валидация секции 'paths'."""
     if not isinstance(paths, dict):
         raise ConfigError(
-            "Section 'paths' must be a dictionary",
-            path=config_path,
-            key="paths"
+            "Section 'paths' must be a dictionary", path=config_path, key="paths"
         )
-    
+
     # Required paths
     missing = REQUIRED_PATHS - paths.keys()
     if missing:
         raise ConfigError(
             f"Missing required paths: {', '.join(sorted(missing))}",
             path=config_path,
-            key="paths"
+            key="paths",
         )
-    
+
     # Unknown paths (warning о возможных опечатках)
     unknown = set(paths.keys()) - KNOWN_PATHS
     if unknown:
@@ -913,21 +941,19 @@ def _validate_paths_section(paths: Any, config_path: str) -> None:
             f"Unknown paths in config (possible typo): {', '.join(sorted(unknown))}. "
             f"Known paths: {', '.join(sorted(KNOWN_PATHS))}"
         )
-    
+
     # Type and emptiness checks
     for key, value in paths.items():
         if not isinstance(value, str):
             raise ConfigError(
                 f"Path '{key}' must be a string, got {type(value).__name__}",
                 path=config_path,
-                key=f"paths.{key}"
+                key=f"paths.{key}",
             )
-        
+
         if not value.strip():
             raise ConfigError(
-                f"Path '{key}' cannot be empty",
-                path=config_path,
-                key=f"paths.{key}"
+                f"Path '{key}' cannot be empty", path=config_path, key=f"paths.{key}"
             )
 
 
@@ -935,14 +961,15 @@ def _validate_paths_section(paths: Any, config_path: str) -> None:
 # INTERNAL: IMMUTABILITY
 # =============================================================================
 
+
 def _deep_freeze(data: Any) -> Any:
     """
     Рекурсивно замораживает структуру данных.
-    
+
     - dict → MappingProxyType (неизменяемый dict)
     - list → tuple (неизменяемый list)
     - Вложенные структуры обрабатываются рекурсивно
-    
+
     Гарантирует, что конфиг не может быть изменён после загрузки.
     """
     if isinstance(data, dict):
@@ -961,7 +988,7 @@ def _deep_freeze(data: Any) -> Any:
 if __name__ == "__main__":
     """
     Утилита для проверки конфига из командной строки.
-    
+
     Usage:
         python -m phantom.core.config
         python -m phantom.core.config --path /etc/phantom/phantom.yaml
@@ -969,27 +996,26 @@ if __name__ == "__main__":
     """
     import argparse
     import json
-    
+
     parser = argparse.ArgumentParser(description="Phantom Config Utility")
     parser.add_argument("--path", help="Path to config file")
     parser.add_argument("--profile", help="Profile to use (default/prod/dev)")
-    parser.add_argument("--validate", action="store_true", help="Validate for daemon mode")
+    parser.add_argument(
+        "--validate", action="store_true", help="Validate for daemon mode"
+    )
     parser.add_argument("--show", action="store_true", help="Print config as JSON")
     args = parser.parse_args()
-    
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(levelname)s: %(message)s"
-    )
-    
+
+    logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
+
     try:
         config = get_config(path=args.path, profile=args.profile)
-        
+
         if args.validate:
             print("Running daemon validation checks...")
             validate_config_for_daemon()
             print("✓ Configuration is valid for daemon mode")
-        
+
         if args.show:
             # Convert MappingProxyType to dict for JSON serialization
             def unfreeze(obj):
@@ -998,14 +1024,16 @@ if __name__ == "__main__":
                 elif isinstance(obj, tuple):
                     return [unfreeze(item) for item in obj]
                 return obj
-            
+
             print(json.dumps(unfreeze(config), indent=2))
-        
+
         if not args.validate and not args.show:
-            print(f"✓ Configuration loaded successfully from {_get_default_config_path()}")
+            print(
+                f"✓ Configuration loaded successfully from {_get_default_config_path()}"
+            )
             print(f"  Profile: {get_profile()}")
             print(f"  Sections: {', '.join(sorted(config.keys()))}")
-    
+
     except ConfigError as e:
         print(f"✗ Configuration error: {e}", file=sys.stderr)
         if e.path:
@@ -1016,5 +1044,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"✗ Unexpected error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         sys.exit(2)

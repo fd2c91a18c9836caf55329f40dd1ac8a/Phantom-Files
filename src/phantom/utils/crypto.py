@@ -52,7 +52,9 @@ def watermark_id(prefix: str = "wt") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
-def sign_ed25519(private_key_pem: bytes, data: bytes, passphrase: Optional[str] = None) -> bytes:
+def sign_ed25519(
+    private_key_pem: bytes, data: bytes, passphrase: Optional[str] = None
+) -> bytes:
     """
     Возвращает отделённую подпись Ed25519.
     """
@@ -60,7 +62,9 @@ def sign_ed25519(private_key_pem: bytes, data: bytes, passphrase: Optional[str] 
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     except ImportError as exc:
-        raise RuntimeError("cryptography package is required for Ed25519 signing") from exc
+        raise RuntimeError(
+            "cryptography package is required for Ed25519 signing"
+        ) from exc
 
     try:
         key = serialization.load_pem_private_key(
@@ -68,7 +72,9 @@ def sign_ed25519(private_key_pem: bytes, data: bytes, passphrase: Optional[str] 
             password=passphrase.encode("utf-8") if passphrase else None,
         )
     except (ValueError, TypeError, Exception) as exc:
-        raise RuntimeError(f"Failed to load Ed25519 private key: {type(exc).__name__}") from exc
+        raise RuntimeError(
+            f"Failed to load Ed25519 private key: {type(exc).__name__}"
+        ) from exc
     if not isinstance(key, Ed25519PrivateKey):
         raise RuntimeError("Configured key is not Ed25519")
     return key.sign(data)
